@@ -23,11 +23,11 @@ jobs:
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
   macos-build:
     needs: host-tests
-    # Build the driver and original HeliPort UI using the macOS 15 Intel image.
+    # Keep the macOS 15 Intel image; Xcode 26 supplies the app's Tahoe SDK.
     runs-on: macos-15-intel
     timeout-minutes: 30
     env:
-      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
         with:
