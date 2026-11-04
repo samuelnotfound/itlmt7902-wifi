@@ -34,6 +34,7 @@ BUNDLES = {'itlmt7902.kext', 'ItlWiFi7902.app'}
 CAPTURE_NAMES = {
     'driver-ioreg.txt', 'ethernet-ioreg.txt', 'loaded-kexts.txt', 'network-ports.txt',
     'interfaces.txt', 'unified-log.txt', 'system.txt',
+    'app-processes.txt',
 }
 
 
@@ -59,7 +60,7 @@ def check_name(name):
                 'Private or filesystem metadata file in release input')
         require(lower != '.ds_store' and lower != 'config.plist' and lower not in CAPTURE_NAMES,
                 'Machine configuration or captured logs in release input')
-        require(not lower.endswith(('.log', '.bak', '.backup', '.pem', '.key', '.p12', '.pfx', '.pyc')),
+        require(not lower.endswith(('.log', '.bak', '.backup', '.pem', '.key', '.p12', '.pfx', '.pyc', '.ips', '.crash')),
                 'Private key, log or backup file in release input')
 
 

@@ -15,6 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 scripts/check-release.py
+      - run: bash -n scripts/collect-logs.sh
       - run: bash tests/run_all.sh
         env:
           CXX: clang++
