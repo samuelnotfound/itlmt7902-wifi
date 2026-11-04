@@ -23,9 +23,11 @@ jobs:
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
   macos-build:
     needs: host-tests
-    # The Tahoe UI needs SDK 26; both build scripts explicitly output x86_64.
-    runs-on: macos-26
+    # Build the driver and Tahoe app natively for the Intel Hackintosh.
+    runs-on: macos-26-intel
     timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
         with:
