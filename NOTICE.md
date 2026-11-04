@@ -23,8 +23,7 @@ not re-licensed as GPL firmware. Release packages carry their license and hashes
 MacKernelSDK is pinned to `3f750085caa17ec3a7880f11c11bf4f48cd6a164` and is
 obtained separately. This standalone MediaTek tree is forked from hbyonly1's
 project and adapted from our MT7902 0.2.11 snapshot, commit
-`fc396ba` (the complete hash is recorded in the build manifest). No Intel kernel
-driver or MtkWlan/native driver code is included.
+`fc396ba` (the complete hash is recorded in the build manifest).
 
 The `userspace/HeliPort` submodule is an app-only fork of OpenIntelWireless/HeliPort.
 Its UI and supporting code retain their BSD-3-Clause LICENSE and notices. That is

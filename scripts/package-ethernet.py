@@ -22,7 +22,7 @@ kernel=(r/'build/itlmt7902.kext/Contents/MacOS/itlmt7902').read_bytes()
 for blob in (r/'fw').glob('*.bin'): assert kernel.count(blob.read_bytes())==1,blob.name
 assert not any('MtkWlan' in p.name for p in stage.rglob('*'))
 manifest={'driver_version':version,'source_commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=r).decode().strip(),
- 'driver_baseline_commit':'fc396ba','driver_backend':'standalone itlmt7902, Ethernet',
+ 'driver_baseline_commit':'fc396baebec051f853ddee79de13f0b34138dd33','driver_backend':'standalone itlmt7902, Ethernet',
  'ui_commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=r/'userspace/HeliPort').decode().strip(),
  'heliport_adapter_hardware_validated':False,'driver_hotspot_test':'user-reported pass on the 0.2.11 baseline',
  'firmware_embedded':True,'native_wifi':False}

@@ -5,9 +5,7 @@ adapted for MediaTek **MT7902 PCIe 14c3:7902** on Intel x86_64 macOS Tahoe.
 It contains the standalone `itlmt7902.kext` and links a modified **HeliPort** UI
 through the [userspace/HeliPort submodule](userspace/HeliPort).
 
-**No MtkWlan/native driver is included.** This uses an Ethernet interface with a
-menu-bar app. Work on the separate WTL native experiment is deferred because the
-test machine hard-froze with its native join path.
+The driver exposes an Ethernet interface managed through HeliPort's menu-bar UI.
 
 ## Baseline and validation
 
@@ -31,20 +29,17 @@ replacing the app does not require a reboot.
 
 1. Download **HeliPort-MT7902.zip** from a successful Actions build. Extract it and
    copy **HeliPort-MT7902.app** to `/Applications`.
-2. Quit ItlWiFi7902, stock HeliPort and MtkWiFi7902, and disable their login items.
+2. Quit other Wi-Fi control apps and disable their login items.
    Run only HeliPort-MT7902, choose the hotspot/network and enter its password.
    Password saving uses HeliPort's keychain management. Its modern/legacy UI
    choices remain in Preferences. The adapter has a separate bundle ID, so it
    does not replace stock HeliPort's settings or keychain namespace.
-3. If recovering from the native experiment, restore your working EFI/standalone
-   driver first: disable both `MtkWlan.kext` and `MtkWlanNative.kext` and enable
-   `itlmt7902.kext`. Loading a different kernel driver requires a reboot.
 
 For a fresh driver installation, back up your EFI and add `itlmt7902.kext` under
 OpenCore `Kernel → Add` with BundlePath `itlmt7902.kext`, ExecutablePath
 `Contents/MacOS/itlmt7902`, PlistPath `Contents/Info.plist`, Enabled true. Put the
 bundle in `EFI/OC/Kexts`. This baseline requires **`mt7902_stage=3`** for connection
-mode; stage 2 is passive scan only. No native-Wi-Fi flags are used. Do not place
+mode; stage 2 is passive scan only. Do not place
 passwords in Info.plist. Firmware is embedded; no separate firmware directory is
 required on macOS. Keep the old EFI as a recovery option.
 
@@ -78,8 +73,7 @@ interoperability remain unfinished. The app's power switch disconnects and stops
 its joins; it does not physically turn off the radio. Driver data not supplied
 through its ABI (BSSID/noise/MCS/PHY) is shown as unknown.
 
-Run `bash collect-logs.sh` from the bundle after a failed attempt. No further
-native-join test is needed for this app-only work. Historical driver notes are
+Run `bash collect-logs.sh` from the bundle after a failed attempt. Driver notes are
 in `docs/LEGACY-STANDALONE-README.md` and the numbered release notes.
 
 ## Build
