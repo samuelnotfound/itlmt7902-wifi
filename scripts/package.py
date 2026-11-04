@@ -16,21 +16,21 @@ parser.add_argument('--dist',type=Path,help='Output directory (default: reposito
 args=parser.parse_args()
 info=plistlib.loads((root/'src/Info.plist').read_bytes())
 version=info['CFBundleVersion']
-assert plistlib.loads((root/'build/itlmt7922.kext/Contents/Info.plist').read_bytes())==info
-app_info=plistlib.loads((root/'build/ItlWiFi7922.app/Contents/Info.plist').read_bytes())
+assert plistlib.loads((root/'build/itlmt7902.kext/Contents/Info.plist').read_bytes())==info
+app_info=plistlib.loads((root/'build/ItlWiFi7902.app/Contents/Info.plist').read_bytes())
 assert app_info['CFBundleShortVersionString']==version
-binary=(root/'build/itlmt7922.kext/Contents/MacOS/itlmt7922').read_bytes()
+binary=(root/'build/itlmt7902.kext/Contents/MacOS/itlmt7902').read_bytes()
 assert version.encode()+b'\0' in binary
 for firmware in sorted((root/'fw').glob('*.bin')):
     assert binary.count(firmware.read_bytes())==1,firmware.name
-subprocess.run(['codesign','--verify','--deep','--strict',str(root/'build/ItlWiFi7922.app')],check=True)
+subprocess.run(['codesign','--verify','--deep','--strict',str(root/'build/ItlWiFi7902.app')],check=True)
 dist=args.dist.resolve() if args.dist else root/'dist'
 dist.mkdir(parents=True,exist_ok=True)
-name='itlmt7922-'+version
+name='itlmt7902-'+version
 package=dist/name
 if package.exists():shutil.rmtree(package)
 package.mkdir()
-for artifact in ('itlmt7922.kext','ItlWiFi7922.app'):
+for artifact in ('itlmt7902.kext','ItlWiFi7902.app'):
     shutil.copytree(root/'build'/artifact,package/artifact,ignore=shutil.ignore_patterns('._*','.DS_Store'))
 for filename in ('README.md','README.zh-CN.md','CONTRIBUTING.md','LICENSE','NOTICE.md'):
     shutil.copy2(root/filename,package/filename)
@@ -47,7 +47,7 @@ def create_zip(source,output):
 all_in_one=dist/(name+'.zip')
 create_zip(package,all_in_one)
 archives=[all_in_one]
-for artifact in ('itlmt7922.kext','ItlWiFi7922.app'):
+for artifact in ('itlmt7902.kext','ItlWiFi7902.app'):
     output=dist/(artifact+'-'+version+'.zip')
     with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as archive:
         paths=list((package/artifact).rglob('*'))+list((package/'licenses').rglob('*'))+list((package/'docs').rglob('*'))
@@ -60,7 +60,10 @@ for artifact in ('itlmt7922.kext','ItlWiFi7922.app'):
 checksums={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(archives)}
 (dist/'SHA256SUMS.txt').write_text(''.join(digest+'  '+name+'\n' for name,digest in checksums.items()))
 manifest={'version':version,'architecture':'x86_64','kernel_bundle':info['CFBundleIdentifier'],
-          'firmware_embedded':True,'binary_sha256':hashlib.sha256(binary).hexdigest(),'assets':checksums}
+          'firmware_embedded':True,'port_scope':'connection-test','hardware_validated':False,
+          'hardware_checkpoints':{'firmware_bootstrap':'user-reported-pass','passive_scan':'user-reported-pass',
+                                  'wpa2_connection':'unverified','ethernet_traffic':'unverified'},
+          'binary_sha256':hashlib.sha256(binary).hexdigest(),'assets':checksums}
 try:
     manifest['source_commit']=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],stderr=subprocess.DEVNULL).decode().strip()
 except subprocess.CalledProcessError:

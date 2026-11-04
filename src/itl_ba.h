@@ -4,7 +4,7 @@
 //   * the receive reorder buffer (port of the algorithm in Linux mt76 agg-rx.c: window, hole flush on timeout, BAR),
 //   * ADDBA request / response, DELBA and BlockAckReq frame bodies (IEEE 802.11-2020 9.6.5, 9.3.1.8).
 //
-// The MT7922 acknowledges A-MPDUs in hardware once the firmware has been told about the agreement (STA_REC_BA); it does not
+// The MT7902 acknowledges A-MPDUs in hardware once the firmware has been told about the agreement (STA_REC_BA); it does not
 // reorder. Frames come out of the AP's retransmissions in any order, so the host has to put them back in sequence.
 #ifndef ITL_BA_H
 #define ITL_BA_H

@@ -63,7 +63,7 @@ enum SpeedTest {
     ]
 
     static func wifiInterface() -> String? {
-        let svc = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("itlmt7922Eth"))
+        let svc = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("itlmt7902Eth"))
         guard svc != 0 else { return nil }
         defer { IOObjectRelease(svc) }
         return IORegistryEntrySearchCFProperty(svc, kIOServicePlane, "BSD Name" as CFString, kCFAllocatorDefault,

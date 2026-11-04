@@ -1,0 +1,4 @@
+[submodule "userspace/HeliPort"]
+	path = userspace/HeliPort
+	url = https://github.com/samuelnotfound/HeliPort-MT7902.git
+	branch = codex/mt7902-ethernet-ui

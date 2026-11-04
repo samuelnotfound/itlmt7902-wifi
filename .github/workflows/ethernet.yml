@@ -1,0 +1,64 @@
+name: Standalone MT7902 Ethernet and HeliPort
+on:
+  push:
+    branches: ['codex/mt7902-ethernet']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: standalone-mt7902-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check-release.py
+      - run: bash tests/run_all.sh
+        env:
+          CXX: clang++
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+  macos-build:
+    needs: host-tests
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/checkout@v4
+        with:
+          repository: acidanthera/MacKernelSDK
+          ref: 3f750085caa17ec3a7880f11c11bf4f48cd6a164
+          path: build/MacKernelSDK
+      - name: Build standalone driver and HeliPort UI
+        env:
+          MACKERNELSDK: ${{ github.workspace }}/build/MacKernelSDK
+        run: |
+          mkdir -p build
+          {
+            bash scripts/build.sh &&
+            bash userspace/HeliPort/scripts/build-macos.sh
+          } > build/compile.log 2>&1 || { tail -100 build/compile.log; exit 1; }
+      - name: Verify firmware and package Ethernet driver with HeliPort
+        run: |
+          python3 scripts/package.py
+          python3 scripts/check-release.py --dist dist
+          python3 scripts/package-ethernet.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MT7902-Ethernet-HeliPort
+          path: |
+            dist/itlmt7902-HeliPort-*.zip
+            dist/HeliPort-MT7902.zip
+            dist/ETHERNET-SHA256SUMS.txt
+            dist/ethernet-build-manifest.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Standalone-MT7902-build-log
+          path: build/compile.log
+          if-no-files-found: ignore

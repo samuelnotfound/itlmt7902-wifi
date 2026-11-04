@@ -49,15 +49,15 @@ class ReleaseChecks(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'bad.zip'
             with zipfile.ZipFile(path, 'w') as archive:
-                link = zipfile.ZipInfo('itlmt7922.kext/link')
+                link = zipfile.ZipInfo('itlmt7902.kext/link')
                 link.create_system = 3
                 link.external_attr = (stat.S_IFLNK | 0o777) << 16
                 archive.writestr(link, '../outside')
             with self.assertRaises(check.CheckFailure):
                 check.check_archive(path, '0.2.1')
             with zipfile.ZipFile(path, 'w') as archive:
-                archive.writestr('itlmt7922.kext/Contents/Info.plist', plistlib.dumps({}))
-                archive.writestr('itlmt7922.kext/Contents/MacOS/itlmt7922', b'synthetic')
+                archive.writestr('itlmt7902.kext/Contents/Info.plist', plistlib.dumps({}))
+                archive.writestr('itlmt7902.kext/Contents/MacOS/itlmt7902', b'synthetic')
             with self.assertRaises(check.CheckFailure):
                 check.check_archive(path, '0.2.1')
 
@@ -68,8 +68,8 @@ class ReleaseChecks(unittest.TestCase):
             info = plistlib.dumps({'CFBundleShortVersionString': '0.2.1', 'CFBundleVersion': '0.2.1',
                                    'itl_ssid': '', 'itl_psk': ''})
             with zipfile.ZipFile(path, 'w') as archive:
-                archive.writestr('itlmt7922.kext/Contents/Info.plist', info)
-                archive.writestr('itlmt7922.kext/Contents/MacOS/itlmt7922', b'synthetic')
+                archive.writestr('itlmt7902.kext/Contents/Info.plist', info)
+                archive.writestr('itlmt7902.kext/Contents/MacOS/itlmt7902', b'synthetic')
                 for name in check.COMMON_FILES:
                     archive.writestr(name, b'Public release documentation')
                 for name in ('LICENCE.mediatek', 'mt76-LICENSE.txt'):
@@ -83,7 +83,7 @@ class ReleaseChecks(unittest.TestCase):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore', UserWarning)
                 with zipfile.ZipFile(path, 'a') as archive:
-                    archive.writestr('itlmt7922.kext/Contents/Info.plist', info)
+                    archive.writestr('itlmt7902.kext/Contents/Info.plist', info)
             with self.assertRaises(check.CheckFailure):
                 check.check_archive(path, '0.2.1')
 

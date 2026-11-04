@@ -1,4 +1,8 @@
-# MT7922 port
+# Historical upstream MT7922 port notes
+
+These preserved upstream notes describe MT7922 hardware and a separate version
+history. For this MT7902 port, use README.md and RELEASE-0.2.11.md. None of the
+throughput figures or connection results below validate MT7902.
 
 The macOS baseline is [thanhnndev/ga403wm-hackintosh at `0b620b9c47e321adf73d1e0765c835b0095f7fb1`](https://github.com/thanhnndev/ga403wm-hackintosh/tree/0b620b9c47e321adf73d1e0765c835b0095f7fb1). The Connac2 reference is [openwrt/mt76 at `467ae2e3f190baf737e15e318906da0dc7d0ab91`](https://github.com/openwrt/mt76/tree/467ae2e3f190baf737e15e318906da0dc7d0ab91), particularly `mt7921/`, `mt792x_dma.c` and `mt76_connac*`. The Linux driver is used as a hardware/protocol reference, not loaded into macOS.
 

@@ -13,15 +13,15 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 FIRMWARE = {
-    'WIFI_MT7922_patch_mcu_1_1_hdr.bin': '7fc9075d6d54b31e0539734614ca971fa52caf41b642a3000c8a4501591a4d98',
-    'WIFI_RAM_CODE_MT7922_1.bin': 'd100e5e04c324fc8da6302112d1e0b4fac952286447d2419eabcd8fb0a1f5b93',
+    'WIFI_MT7902_patch_mcu_1_1_hdr.bin': 'd73ba9e982f781221a2b9f10c42031f20a9dce046929fc0d55c791a417efe30a',
+    'WIFI_RAM_CODE_MT7902_1.bin': 'b5958ac72c71fb8405e080f52d378d02b484812b9f1010c8843727056bbfc998',
 }
 SOURCE_DIRS = {'src', 'codec', 'app', 'tests', 'fw', 'scripts', 'docs', 'licenses', '.github'}
 SOURCE_FILES = {
     'README.md', 'README.zh-CN.md', 'LICENSE', 'NOTICE.md', 'CHANGELOG.md',
-    'CONTRIBUTING.md', 'SECURITY.md', '.gitignore', '.gitattributes',
+    'CONTRIBUTING.md', 'SECURITY.md', '.gitignore', '.gitattributes', '.gitmodules',
 }
-EXCLUDED_DIRS = {'.git', 'build', 'dist'}
+EXCLUDED_DIRS = {'.git', 'build', 'dist', 'userspace'} # separately pinned/tested app submodule, never bundled as source
 PRIVATE_FIELDS = {'SystemSerialNumber', 'SystemUUID', 'MLB', 'ROM', 'BoardSerialNumber'}
 PRIVATE_PATTERNS = (
     ('personal absolute path', re.compile(rb'/(?:Users|home|Volumes)/[^/\s\x00"\x27]+/')),
@@ -30,7 +30,7 @@ PRIVATE_PATTERNS = (
 )
 COMMON_FILES = {'README.md', 'README.zh-CN.md', 'CONTRIBUTING.md', 'LICENSE', 'NOTICE.md', 'collect-logs.sh'}
 COMMON_ROOTS = COMMON_FILES | {'docs', 'licenses'}
-BUNDLES = {'itlmt7922.kext', 'ItlWiFi7922.app'}
+BUNDLES = {'itlmt7902.kext', 'ItlWiFi7902.app'}
 CAPTURE_NAMES = {
     'driver-ioreg.txt', 'ethernet-ioreg.txt', 'loaded-kexts.txt', 'network-ports.txt',
     'interfaces.txt', 'unified-log.txt', 'system.txt',
@@ -114,7 +114,7 @@ def check_source(root):
             if item.is_file():
                 check_blob(name, item.read_bytes())
     actual = manifest_entries((root / 'fw/SHA256SUMS').read_bytes())
-    require(actual == FIRMWARE, 'Firmware manifest differs from pinned MT7922 files')
+    require(actual == FIRMWARE, 'Firmware manifest differs from pinned MT7902 files')
     require({p.name for p in (root / 'fw').glob('*.bin')} == set(FIRMWARE), 'Unexpected firmware binary')
     for name, digest in FIRMWARE.items():
         require(hashlib.sha256((root / 'fw' / name).read_bytes()).hexdigest() == digest,
@@ -123,6 +123,8 @@ def check_source(root):
     version = info['CFBundleVersion']
     require(re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version) is not None, 'Invalid release version')
     require(info['CFBundleShortVersionString'] == version, 'Kext version fields differ')
+    require((root / 'docs' / ('RELEASE-' + version + '.md')).is_file(),
+            'Current version release notes are missing')
     app = plistlib.loads((root / 'app/Info.plist').read_bytes())
     require(app['CFBundleShortVersionString'] == version, 'App and kext release versions differ')
     kmod = (root / 'src/kmod_info.c').read_text()
@@ -146,7 +148,7 @@ def check_archive(path, version):
             require(item.file_size <= 64 * 1024 * 1024, 'Oversized file in release ZIP')
             if not item.is_dir():
                 check_blob(item.filename, archive.read(item))
-        release = 'itlmt7922-' + version
+        release = 'itlmt7902-' + version
         if roots == {release}:
             base = release + '/'
             bundles = BUNDLES
@@ -176,9 +178,9 @@ def check_archive(path, version):
 
 def check_dist(directory, version):
     expected = {
-        'itlmt7922-' + version + '.zip',
-        'itlmt7922.kext-' + version + '.zip',
-        'ItlWiFi7922.app-' + version + '.zip',
+        'itlmt7902-' + version + '.zip',
+        'itlmt7902.kext-' + version + '.zip',
+        'ItlWiFi7902.app-' + version + '.zip',
     }
     archives = {path.name: path for path in directory.glob('*.zip')}
     require(set(archives) == expected, 'Release directory ZIP set differs from this version')
@@ -190,6 +192,11 @@ def check_dist(directory, version):
             'Release manifest version or architecture differs')
     require(manifest.get('assets') == actual and manifest.get('firmware_embedded') is True,
             'Release manifest assets differ')
+    require(manifest.get('port_scope') == 'connection-test' and manifest.get('hardware_validated') is False,
+            'Unverified connection-test scope must be explicit in the release manifest')
+    checkpoints=manifest.get('hardware_checkpoints',{})
+    require(checkpoints.get('wpa2_connection') == 'unverified' and checkpoints.get('ethernet_traffic') == 'unverified',
+            'Connection and Ethernet hardware testing must remain explicitly unverified')
     for path in archives.values():
         require(not path.is_symlink(), 'Symlink in release directory')
         check_archive(path, version)

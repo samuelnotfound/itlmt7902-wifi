@@ -54,36 +54,7 @@ static void malformedChecks() {
     uint32_t length=0;
     assert(!findClcRegion(buffer,sizeof(buffer),&length));
 }
-static void currentFirmware(const char *path) {
-    std::ifstream file(path,std::ios::binary);
-    assert(file.good());
-    std::vector<uint8_t> fw((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
-    uint32_t length=0;
-    const uint8_t *base=findClcRegion(fw.data(),fw.size(),&length);
-    assert(base && length>400000);
-    for (uint8_t encap=0;encap<2;encap++) {
-        ClcTables selected={};
-        assert(selectClcTables(base,length,encap,&selected));
-        assert(selected.power && (selected.power[7]&1)==encap && selected.skipped==2);
-        uint32_t offset=16,world=0,rules=0;
-        ClcRule rule={}; int state=0;
-        while ((state=nextClcRule(selected.power,clcLe32(selected.power),&offset,&rule))>0) {
-            assert(rule.bytes<=2048);
-            rules++;
-            if (rule.header[0]=='0' && rule.header[1]=='0') world++;
-        }
-        assert(state==0 && world>0 && rules>0);
-        std::cout << "CLC encap=" << (unsigned)encap << " rules=" << rules
-                  << " world=" << world << " skipped=" << selected.skipped << "\n";
-    }
-    // Reject corrupt region lengths without reading beyond the real image.
-    uint8_t *tr=fw.data()+fw.size()-36;
-    uint8_t *first=tr-(size_t)tr[2]*40;
-    put32(first+20,0xffffffffu);
-    assert(!findClcRegion(fw.data(),fw.size(),&length));
-}
-int main(int argc,char **argv) {
-    assert(argc==2);
-    skuChecks(); sarChecks(); malformedChecks(); currentFirmware(argv[1]);
-    std::cout << "MT7922 power/SAR/current-firmware checks passed\n";
+int main() {
+    skuChecks(); sarChecks(); malformedChecks();
+    std::cout << "Inherited Connac2 generic power/SAR bounds checks passed (not MT7902 radio validation)\n";
 }

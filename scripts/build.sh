@@ -1,6 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: BSD-3-Clause-Clear
-# Build the standalone x86_64 MT7922 kext and its menu application.
+# Build the standalone x86_64 MT7902 kext and its menu application.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 kernel_sdk="${MACKERNELSDK:-build/MacKernelSDK}"
@@ -24,12 +24,12 @@ common=(-arch x86_64 -mmacosx-version-min=12.0 -O2 -g -fno-omit-frame-pointer
         -mkernel -fno-builtin -fno-stack-protector -nostdlib -nostdlibinc
         -ffreestanding -DKERNEL -DKERNEL_PRIVATE -DDRIVER_PRIVATE -DAPPLE -DNeXT
         "-I$kernel_sdk/Headers" -Isrc -Icodec)
-kext=build/itlmt7922.kext
+kext=build/itlmt7902.kext
 mkdir -p build/obj "$kext/Contents/MacOS"
 cp src/Info.plist "$kext/Contents/Info.plist"
 objects=()
-sources=(itlmt7922 itlmt7922_m1 itlmt7922_m2 itlmt7922_m3 itlmt7922_txrx
-         itlmt7922_pwr itlmt7922_ctl itlmt7922_eth itlmt7922_ba itlmt7922_uc
+sources=(itlmt7902 itlmt7902_m1 itlmt7902_m2 itlmt7902_m3 itlmt7902_txrx
+         itlmt7902_pwr itlmt7902_ctl itlmt7902_eth itlmt7902_ba itlmt7902_uc
          itl_wpa itl_caps itl_ba)
 for name in "${sources[@]}"; do
     object="build/obj/$name.o"
@@ -51,19 +51,19 @@ done
 xcrun clang++ -arch x86_64 "-mmacosx-version-min=$link_min" -nostdlib \
     -Xlinker -kext -Xlinker -no_data_const \
     "-L$kernel_sdk/Library/x86_64" "-L$apple_sdk/usr/lib" \
-    -lkmodc++ -lkmod -lcc_kext "${objects[@]}" -o "$kext/Contents/MacOS/itlmt7922"
+    -lkmodc++ -lkmod -lcc_kext "${objects[@]}" -o "$kext/Contents/MacOS/itlmt7902"
 # Keep runtime symbols; remove debug-only object-file anchors containing build paths.
-xcrun strip -S "$kext/Contents/MacOS/itlmt7922"
+xcrun strip -S "$kext/Contents/MacOS/itlmt7902"
 plutil -lint "$kext/Contents/Info.plist"
-file "$kext/Contents/MacOS/itlmt7922"
-app=build/ItlWiFi7922.app
+file "$kext/Contents/MacOS/itlmt7902"
+app=build/ItlWiFi7902.app
 mkdir -p "$app/Contents/MacOS" build/swift-module-cache
 cp app/Info.plist "$app/Contents/Info.plist"
 xcrun swiftc -O -target x86_64-apple-macos13.0 \
     -debug-prefix-map "$PWD=." \
     -module-cache-path "$PWD/build/swift-module-cache" \
-    app/ItlWiFi7922.swift app/SpeedTest.swift \
-    -o "$app/Contents/MacOS/ItlWiFi7922" -framework IOKit -framework SwiftUI
+    app/ItlWiFi7902.swift app/SpeedTest.swift \
+    -o "$app/Contents/MacOS/ItlWiFi7902" -framework IOKit -framework SwiftUI
 codesign --force --sign - "$app"
 codesign --verify --deep --strict "$app"
-file "$app/Contents/MacOS/ItlWiFi7922"
+file "$app/Contents/MacOS/ItlWiFi7902"

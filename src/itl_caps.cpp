@@ -129,7 +129,7 @@ size_t itl_caps_build_vht(uint8_t *o, bool allow160)
 }
 
 // HE Capabilities (IEEE 802.11ax 9.4.2.248), a station without beamforming, MU-MIMO, OFDMA-specific or TWT features:
-// the firmware does what it does for the rest. Based on the capabilities mt7922 advertises in Linux (mt7922/main.c).
+// the firmware does what it does for the rest. Based on the capabilities mt7902 advertises in Linux (mt7902/main.c).
 size_t itl_caps_build_he(uint8_t *o, bool band5g, bool allow160)
 {
     bool wide = band5g && allow160;
@@ -147,7 +147,7 @@ size_t itl_caps_build_he(uint8_t *o, bool band5g, bool allow160)
     phy[2] = 0x02 | 0x08;                                // NDP with 4x HE-LTF and 3.2 us GI | STBC RX below 80 MHz
     phy[3] = 0x02 | 0x10;                                // DCM TX / RX up to QPSK
     phy[6] = 0x20;                                       // partial bandwidth extended range
-    phy[7] = 0x04;                                       // HE SU/MU PPDU with 4x HE-LTF and 0.8 us GI (as mt7922)
+    phy[7] = 0x04;                                       // HE SU/MU PPDU with 4x HE-LTF and 0.8 us GI (as mt7902)
     phy[8] = band5g ? (uint8_t)(0x40 | (allow160 ? 0x04 | 0x08 : 0)) : (uint8_t)(0x02 | 0x40);   // 20/80 MHz in 160 MHz PPDU; DCM RU 484
     phy[9] = (uint8_t)(0x04 | 0x08 | (ITL_HE_PKT_EXT << 6));   // 1024-QAM below 242-tone RU (TX / RX) | nominal packet padding 16 us
     uint8_t *m = o + 3 + 6 + 11;

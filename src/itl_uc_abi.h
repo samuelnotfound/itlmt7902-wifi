@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 // Copyright (c) 2026 thanhnndev and contributors
-// Interface between itlmt7922 and user space (the ItlWiFi menu bar app). Shared by the kext and the app; keep it plain C.
+// Interface between itlmt7902 and user space (the ItlWiFi menu bar app). Shared by the kext and the app; keep it plain C.
 //
-// Commands go through IOServiceOpen(itlmt7922) + IOConnectCallStructMethod. State comes back as registry properties on the
-// itlmt7922 service, readable without opening a connection (IORegistryEntryCreateCFProperty):
+// Commands go through IOServiceOpen(itlmt7902) + IOConnectCallStructMethod. State comes back as registry properties on the
+// itlmt7902 service, readable without opening a connection (IORegistryEntryCreateCFProperty):
 //   wifi-state     string  off | idle | scanning | connecting | connected | failed
 //   wifi-error     string  why the last attempt failed or the link went down ("" when none)
 //   wifi-ssid      string  network of the current / last attempt

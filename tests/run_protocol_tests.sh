@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 test_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-test_dir=$(mktemp -d "${TMPDIR:-/tmp}/mt7922-protocol.XXXXXX")
+test_dir=$(mktemp -d "${TMPDIR:-/tmp}/mt7902-protocol.XXXXXX")
 trap 'rm -rf "$test_dir"' EXIT HUP INT TERM
 for kind in wpa caps ba; do
     "${CXX:-c++}" -std=c++17 -Wall -Wextra \
