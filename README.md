@@ -39,7 +39,10 @@ For a fresh driver installation, back up your EFI and add `itlmt7902.kext` under
 OpenCore `Kernel → Add` with BundlePath `itlmt7902.kext`, ExecutablePath
 `Contents/MacOS/itlmt7902`, PlistPath `Contents/Info.plist`, Enabled true. Put the
 bundle in `EFI/OC/Kexts`. This baseline requires **`mt7902_stage=3`** for connection
-mode; stage 2 is passive scan only. Do not place
+mode; without that boot argument, it defaults to passive scan-only stage 2.
+Append the argument to your existing `boot-args` under OpenCore
+`NVRAM → Add → 7C436110-AB2A-4BBB-A880-FE41995C9F82` and reboot once.
+Do not place
 passwords in Info.plist. Firmware is embedded; no separate firmware directory is
 required on macOS. Keep the old EFI as a recovery option.
 
