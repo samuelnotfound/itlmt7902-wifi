@@ -48,10 +48,13 @@ required on macOS. Keep the old EFI as a recovery option.
 
 The combined **itlmt7902-HeliPort-0.2.13.zip** has the driver, app, notices and log
 collector. The app-only ZIP is preferable when you already have the working driver.
-For a driver update with HeliPort 2.0.3 already installed, use the separate
+For a driver update with HeliPort already installed, use the separate
 **itlmt7902.kext-0.2.13.zip**; it includes the kext, release notes and licenses.
 
-HeliPort **2.0.3** updates only the app's animation and interface-info handling.
+HeliPort **2.1.0** adds an automatic Tahoe menu appearance on macOS 26 and newer,
+with native menu rows, system icons, section headings and a larger Wi-Fi switch.
+Earlier systems keep the existing UI, and **Use Legacy UI** remains available.
+It also includes the animation and interface-info changes from 2.0.3.
 Keep an installed 0.2.13 driver when trying this app update; no reboot is needed.
 The log collector includes app logs and up to three existing HeliPort crash reports.
 
