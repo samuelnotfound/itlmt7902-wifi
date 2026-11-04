@@ -524,6 +524,7 @@ static const char *failText(const char *stage)
 {
     if (!strncmp(stage, "nocred", 6)) return "no network configured";
     if (!strncmp(stage, "scan", 4)) return "network not found";
+    if (!strncmp(stage, "rates-fail", 10)) return "network advertises no usable legacy rates or has malformed rate information";
     if (!strncmp(stage, "device-setup-fail", 17)) return "firmware rejected station MAC registration";
     if (!strncmp(stage, "channel-setup-fail", 18)) return "channel switch or transmit timing setup failed";
     if (!strncmp(stage, "sta-setup-fail", 14)) return "firmware rejected station setup before authentication";
@@ -568,7 +569,7 @@ void itlmt7902::m3SaveAttempt(int result)
     const char *keys[]={"m3-res","m3-log","wifi-auth-diag","wifi-assoc-diag",
         "wifi-last-mgmt-tx","wifi-completion-diag","wifi-rx-packet-types",
         "wifi-txs-raw","wifi-txfree-raw","wifi-hw-tx","wifi-tx-memory",
-        "device-info-ready","device-info-result","channel-switch-result","wifi-channel-setup"};
+        "device-info-ready","device-info-result","channel-switch-result","wifi-channel-setup","wifi-rate-profile"};
     for (const char *key:keys) {
         OSObject *value=getProperty(key);
         if (value) entry->setObject(key,value);

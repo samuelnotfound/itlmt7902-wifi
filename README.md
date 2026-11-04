@@ -9,12 +9,12 @@ The driver exposes an Ethernet interface managed through HeliPort's menu-bar UI.
 
 ## Baseline and validation
 
-The driver comes from our MT7902 **0.2.11** snapshot, commit `fc396ba`. The user
-reported working Internet through Redmi A3 and iPhone 12 mini hotspots on that
-baseline; connecting to the router was not working. The driver sources are
-unchanged from that snapshot. The new HeliPort adapter is compile/fixture tested
-but **has not yet been validated on hardware**. Changing the app does not fix
-router compatibility, add WPA3/enterprise or make macOS treat this as native Wi-Fi.
+Driver **0.2.13** builds on the MT7902 0.2.11 snapshot, commit `fc396ba`, which
+provided Internet through Redmi A3 and iPhone 12 mini hotspots. Router joins on
+that baseline timed out. This version corrects empty basic-rate configuration,
+matches association rates to the AP, and adds constrained HT20 negotiation for
+OFDM-only peers. These changes require hardware validation; router connectivity
+is not yet confirmed. See [the release notes](docs/RELEASE-0.2.13.md).
 
 Driver ancestry and firmware: hbyonly1's MT7922 port, thanhnndev and contributors'
 MediaTek driver, and the pinned BSD-3-Clause-Clear mt76 references recorded in
@@ -46,7 +46,7 @@ Do not place
 passwords in Info.plist. Firmware is embedded; no separate firmware directory is
 required on macOS. Keep the old EFI as a recovery option.
 
-The combined **itlmt7902-HeliPort-0.2.11.zip** has the driver, app, notices and log
+The combined **itlmt7902-HeliPort-0.2.13.zip** has the driver, app, notices and log
 collector. The app-only ZIP is preferable when you already have the working driver.
 
 ## Source layout and GitHub linked folders
@@ -70,8 +70,9 @@ pointer here. It does not silently follow a moving app branch.
 ## Limits and diagnostics
 
 This checkpoint supports visible WPA2-PSK/CCMP networks with optional PMF and
-non-DFS channels 1–11, 36/40/44/48, 149/153/157/161/165. Legacy 20 MHz operation
-and a 10 dBm test ceiling are retained. Group rekey, sleep/wake and router
+non-DFS channels 1–11, 36/40/44/48, 149/153/157/161/165. One-stream HT20 is tried
+for OFDM-only HT-capable peers; CCK-capable 2.4 GHz peers retain the legacy path.
+The 10 dBm test ceiling is retained. Group rekey, sleep/wake and router
 interoperability remain unfinished. The app's power switch disconnects and stops
 its joins; it does not physically turn off the radio. Driver data not supplied
 through its ABI (BSSID/noise/MCS/PHY) is shown as unknown.

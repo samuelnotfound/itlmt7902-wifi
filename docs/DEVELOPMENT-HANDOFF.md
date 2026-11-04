@@ -25,7 +25,14 @@ the submodule pointer in the driver repository.
 
 ## Current validated source and builds
 
-- Driver version: **0.2.11**. `src/` and `codec/` are unchanged from the earlier
+The earlier baseline/build details below describe **0.2.11**. Development now
+targets **0.2.13** with basic-rate fallback, AP-matched association rates and
+constrained HT20 negotiation. See `RELEASE-0.2.13.md`. The supplied same-boot
+capture confirms stage 3 and hotspot traffic on 0.2.11; the OFDM-only router
+attempts show basic rates zero and authentication timeouts with no observed
+TXS/TXFREE. Hardware results for the changed 0.2.13 driver are still pending.
+
+- Baseline driver version: **0.2.11**. Its `src/` and `codec/` matched the earlier
   standalone snapshot `fc396baebec051f853ddee79de13f0b34138dd33`.
 - The driver baseline was reported to provide Internet through Android and iPhone
   hotspots. Router interoperability remains unresolved. Do not claim all networks

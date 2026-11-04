@@ -457,7 +457,7 @@ void itlmt7902::m1Main()
         else if (!shouldStop() && !firmwareFault) {
             if (diagnosticStage>=3) {
                 m3On=true;
-                m3fast=false; fastLevel=0; noPwr=false; pwrCeil=20; // 10 dBm test ceiling, no HT/VHT/HE.
+                m3fast=true; fastLevel=1; noPwr=false; pwrCeil=20; // HT20/1SS compatibility, 10 dBm ceiling.
                 setProperty("scan-supported",kOSBooleanTrue);
                 setProperty("join-supported",kOSBooleanTrue);
                 __atomic_store_n(&scanControlReady,true,__ATOMIC_RELEASE);

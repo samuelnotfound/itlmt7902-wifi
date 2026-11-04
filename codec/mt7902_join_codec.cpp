@@ -4,6 +4,63 @@
 namespace {
 uint16_t le16(const uint8_t *p) { return (uint16_t)(p[0] | (uint16_t)p[1]<<8); }
 bool suite(const uint8_t *p, uint8_t type) { return !p[0] && p[1]==15 && p[2]==172 && p[3]==type; }
+const uint8_t legacyRates[]={2,4,11,22,12,18,24,36,48,72,96,108}; // 500 kb/s.
+}
+bool mt7902_parse_legacy_rates(const uint8_t *ies,size_t length,uint8_t channel,
+                               Mt7902LegacyRates *out)
+{
+    if (!ies || !out || !mt7902_join_channel(channel)) return false;
+    Mt7902LegacyRates r={};
+    for (size_t pos=0;pos<length;) {
+        if (length-pos<2 || ies[pos+1]>length-pos-2) return false;
+        const size_t bytes=ies[pos+1];
+        if (ies[pos]==1 || ies[pos]==50) for (size_t i=0;i<bytes;i++) {
+            const uint8_t rate=ies[pos+2+i];
+            for (unsigned k=channel<=14?0u:4u;k<12;k++) if ((rate&0x7f)==legacyRates[k]) {
+                if (k<4) {
+                    r.supported_cck|=(uint8_t)(1u<<k);
+                    if (rate&0x80) r.basic_cck|=(uint8_t)(1u<<k);
+                } else {
+                    r.supported_ofdm|=(uint8_t)(1u<<(k-4));
+                    if (rate&0x80) r.basic_ofdm|=(uint8_t)(1u<<(k-4));
+                }
+            }
+        }
+        pos+=bytes+2;
+    }
+    if (!r.supported_cck && !r.supported_ofdm) return false;
+    if (!r.basic_cck && !r.basic_ofdm) {
+        unsigned minimum=12;
+        for (unsigned k=0;k<12;k++) {
+            const bool supported=k<4?(r.supported_cck&(1u<<k)):(r.supported_ofdm&(1u<<(k-4)));
+            if (supported && (minimum==12 || legacyRates[k]<legacyRates[minimum])) minimum=k;
+        }
+        if (minimum<4) r.basic_cck=(uint8_t)(1u<<minimum);
+        else r.basic_ofdm=(uint8_t)(1u<<(minimum-4));
+        r.basic_fallback=true;
+    }
+    *out=r;
+    return true;
+}
+size_t mt7902_encode_legacy_rates(uint8_t *out,size_t capacity,const Mt7902LegacyRates &r)
+{
+    if (!out || (r.supported_cck&0xf0) || (r.basic_cck&~r.supported_cck) ||
+        (r.basic_ofdm&~r.supported_ofdm)) return 0;
+    uint8_t rates[12]; size_t count=0;
+    for (unsigned k=0;k<12;k++) {
+        const uint8_t mask=(uint8_t)(1u<<(k<4?k:k-4));
+        const bool supported=(k<4?r.supported_cck:r.supported_ofdm)&mask;
+        const bool basic=(k<4?r.basic_cck:r.basic_ofdm)&mask;
+        if (supported) rates[count++]=legacyRates[k]|(basic?0x80:0);
+    }
+    const size_t total=count+2+(count>8?2:0);
+    if (!count || capacity<total) return 0;
+    const size_t first=count>8?8:count;
+    out[0]=1; out[1]=(uint8_t)first; memcpy(out+2,rates,first);
+    if (count>8) {
+        out[10]=50; out[11]=(uint8_t)(count-8); memcpy(out+12,rates+8,count-8);
+    }
+    return total;
 }
 bool mt7902_join_channel(uint8_t c)
 {
@@ -47,6 +104,21 @@ uint8_t mt7902_fixed_spe(uint8_t mask)
     // mt76_connac_spe_idx: WF0-only is index 0; duplicate WF0/WF1 is 24.
     static const uint8_t table[]={0,0,1,24,3,2,4,24,9,8,6,10,16,12,18,24};
     return mask<sizeof(table)?table[mask]:0;
+}
+size_t mt7902_encode_ht20(uint8_t *out,size_t capacity,uint8_t mask)
+{
+    if (!out || capacity<28 || !mask) return 0;
+    memset(out,0,28);
+    out[0]=45; out[1]=26; out[2]=0x0c; // SMPS disabled; HT20, long GI.
+    out[4]=5u<<2; // Max A-MPDU 8191, minimum MPDU spacing 4 us.
+    out[5]=mask; out[17]=1; // RX MCS0..7; TX MCS set defined, same as RX.
+    return 28;
+}
+uint32_t mt7902_ht20_rate(uint8_t mask)
+{
+    static const uint8_t rate[]={6,13,19,26,39,52,58,65};
+    for (unsigned i=8;i>0;i--) if (mask&(1u<<(i-1))) return rate[i-1];
+    return 0;
 }
 size_t mt7902_encode_keep_awake(uint8_t *out,size_t capacity)
 {

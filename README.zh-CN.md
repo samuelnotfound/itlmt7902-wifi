@@ -1,4 +1,4 @@
-# MT7902 connection test 0.2.11
+# MT7902 connection test 0.2.13
 
 See README.md for current installation steps, hardware checkpoints and limits.
 Firmware initialization and passive scanning have user-reported hardware passes.

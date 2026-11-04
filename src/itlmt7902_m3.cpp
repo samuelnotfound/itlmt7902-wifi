@@ -167,27 +167,28 @@ void itlmt7902::m3Event(const uint8_t *ev, uint32_t len)
 // Rates / RSN of the target AP from the captured beacon IEs.
 void itlmt7902::m3ParseAp()
 {
-    static const uint8_t r5g[8] = {12, 18, 24, 36, 48, 72, 96, 108};    // 500 kb/s units
-    static const uint8_t rcck[4] = {2, 4, 11, 22};
     const uint8_t *ie = tgtIe, *end = tgtIe + tgtIeLen;
     apSupp = apBasic = apCck = apBasicCck = 0;
     apRsnLen = 0;
     while (ie + 2 <= end && ie + 2 + ie[1] <= end) {
         uint8_t id = ie[0], l = ie[1];
-        if (id == 1 || id == 50) {
-            for (int i = 0; i < l; i++)
-                for (int k = 0; k < 8; k++)
-                    if ((ie[2 + i] & 0x7f) == r5g[k]) { apSupp |= 1u << k; if (ie[2 + i] & 0x80) apBasic |= 1u << k; }
-            for (int i = 0; i < l; i++)
-                for (int k = 0; k < 4; k++)
-                    if ((ie[2 + i] & 0x7f) == rcck[k]) { apCck |= 1u << k; if (ie[2 + i] & 0x80) apBasicCck |= 1u << k; }
-        } else if (id == 48 && l <= sizeof(apRsn) - 2) {
+        if (id == 48 && l <= sizeof(apRsn) - 2) {
             apRsnLen = (uint8_t)(l + 2);
             memcpy(apRsn, ie, apRsnLen);
         }
         ie += 2 + l;
     }
-    m3log("ap rates supp=%02x basic=%02x cck=%x/%x rsn=%u", apSupp, apBasic, apCck, apBasicCck, apRsnLen);
+    Mt7902LegacyRates rates={};
+    const bool validRates=mt7902_parse_legacy_rates(tgtIe,tgtIeLen,tgtCh,&rates);
+    if (validRates) {
+        apSupp=rates.supported_ofdm; apCck=rates.supported_cck;
+        apBasic=rates.basic_ofdm; apBasicCck=rates.basic_cck;
+    }
+    char profile[160];
+    snprintf(profile,sizeof(profile),"valid=%u ofdm=%02x basic_ofdm=%02x cck=%x basic_cck=%x basic_fallback=%u",
+        validRates?1u:0u,apSupp,apBasic,apCck,apBasicCck,rates.basic_fallback?1u:0u);
+    setProperty("wifi-rate-profile",profile);
+    m3log("ap rates %s rsn=%u",profile,apRsnLen);
     m3FastPlan();
     if (apRsnLen >= 14) {
         // version(2) group(4) pairwise count(2) ...
@@ -207,8 +208,8 @@ uint8_t itlmt7902::fastSig(uint8_t level)
     return (level >= 4 && !noAmsdu ? 1 : 0) | ((level >= 6 && apCaps.he) ? 2 : 0) | (bw == 3 ? 4 : 0);
 }
 
-// HT/VHT/HE plan (boot-arg mt7902_fast=<level>): what the AP offers, the channel width to run at and the rate to report to macOS.
-// Stays off (legacy 6 Mb/s path, exactly as before) unless the AP advertises HT. 2.4 GHz is HT / HE only (no VHT).
+// Constrained HT20 plan: OFDM-only peers, one stream, no wide/VHT/HE claims.
+// CCK-capable 2.4 GHz hotspots keep the observed legacy path.
 void itlmt7902::m3FastPlan()
 {
     fastActive = false;
@@ -218,18 +219,23 @@ void itlmt7902::m3FastPlan()
     if (!m3fast || lvl < 1) return;
     itl_caps_parse(tgtIe, tgtIeLen, &apCaps);
     bool g2 = tgtCh <= 14;
-    if (g2) { apCaps.vht = false; apCaps.vhtOp = false; }
+    apCaps.vht=false; apCaps.vhtOp=false; apCaps.he=false;
+    // Keep the observed hotspot path unchanged; OFDM-only peers may negotiate HT20.
+    if (g2 && apCck) return;
     if (!apCaps.ht) {
         m3log("fast: off (ch=%u ht=%d)", tgtCh, apCaps.ht ? 1 : 0);
         baLog("fast off ch=%u ht=%d", tgtCh, apCaps.ht ? 1 : 0);
         return;
     }
-    itl_caps_channel(&apCaps, tgtCh, lvl >= 5 && !g2 && !no160, &fastBw, &fastCenter);
-    fastAllow160 = fastBw == 3;
-    fastAmsdu = lvl >= 4 && !noAmsdu;
+    if (nicCaps.nss!=1 || nicCaps.chain_mask!=1 || !apCaps.mcsRx[0]) return;
+    fastBw=0; fastCenter=tgtCh;
+    fastAllow160=false; fastAmsdu=false;
     fastHe = false; // HE ABI is not enabled in the first Connac2 full port.
-    fastNss = itl_caps_nss(&apCaps);
-    fastRate = itl_caps_max_rate(&apCaps, fastBw, fastHe);
+    fastNss=1;
+    apCaps.htCap&=0x000c;
+    apCaps.ampduParm&=0x1c;
+    bzero(apCaps.mcsRx+1,sizeof(apCaps.mcsRx)-1);
+    fastRate=mt7902_ht20_rate(apCaps.mcsRx[0]);
     fastActive = true;
     txPool = true;
     // Token ownership is retained until TXFREE or a quiesced hardware reset.
@@ -404,8 +410,7 @@ int itlmt7902::m3Bss(bool enable)
     uint16_t phy=g2?3:8;
     if (fastActive) { b[25]|=g2?0x08:(0x10|(apCaps.vht?0x20:0)); phy|=0x10|(apCaps.vht?0x20:0); }
     put16(b+26,M3_BMC_WCID); put16(b+28,phy);
-    // Match the association WMM IE and STA BASIC/WTBL QoS flags. This
-    // checkpoint disables fastActive, so it must not advertise a QoS BSS.
+    // Match the association WMM IE and STA BASIC/WTBL QoS flags.
     uint8_t *q=m.tlv(15,8); q[4]=fastActive?1:0;
     m.b[2]=m.b[3]=0; // BSS header has reserved bytes, unlike STA's TLV count.
     int rc=m3Cmd(UNI_BSS_INFO_UPDATE,m.b,m.n,enable?"bss(enable)":"bss(add)");
@@ -690,23 +695,21 @@ int itlmt7902::m3Assoc()
     uint8_t f[320];
     m3Hdr(f, 0x00, tgtBssid, mac);
     uint8_t *p = f + 24;
-    // 2.4 GHz: advertise the CCK rates the AP's basic set usually contains also on the legacy path (an AP whose basic rates are
-    // 1/2/5.5/11 refuses a station that offers OFDM only)
+    // Advertise the actual AP/driver rate intersection, including CCK only when offered.
     bool g2 = tgtCh <= 14;
-    put16(p, g2 ? 0x0431 : 0x0411); p += 2;                     // ESS | PRIVACY | short slot (| short preamble on 2.4 GHz)
+    put16(p, g2 && apCck ? 0x0431 : 0x0411); p += 2;
     put16(p, 10); p += 2;                                        // listen interval
     uint8_t sl = (uint8_t)strlen(m3ssid);
     *p++ = 0; *p++ = sl; memcpy(p, m3ssid, sl); p += sl;
-    static const uint8_t rates[8] = {0x8c, 0x12, 0x98, 0x24, 0xb0, 0x48, 0x60, 0x6c};
-    static const uint8_t rates2g[8] = {0x82, 0x84, 0x8b, 0x96, 0x0c, 0x12, 0x18, 0x24};     // 1, 2, 5.5, 11 (CCK), 6, 9, 12, 18
-    static const uint8_t ext2g[4] = {0x30, 0x48, 0x60, 0x6c};                               // 24, 36, 48, 54
-    *p++ = 1; *p++ = 8; memcpy(p, g2 ? rates2g : rates, 8); p += 8;
-    if (g2) { *p++ = 50; *p++ = 4; memcpy(p, ext2g, 4); p += 4; }
+    const Mt7902LegacyRates rates={apCck,apSupp,apBasicCck,apBasic,false};
+    const size_t rateBytes=mt7902_encode_legacy_rates(p,(size_t)(f+sizeof(f)-p),rates);
+    if (!rateBytes) return ITL_EINVAL;
+    p+=rateBytes;
     static const uint8_t rsn[22] = {0x30, 0x14, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04,
                                     0x01, 0x00, 0x00, 0x0f, 0xac, 0x02, 0x00, 0x00};
     memcpy(p, rsn, sizeof(rsn)); p += sizeof(rsn);
     if (fastActive) {
-        p += itl_caps_build_ht(p);
+        p += mt7902_encode_ht20(p,(size_t)(f+sizeof(f)-p),apCaps.mcsRx[0]);
         if (apCaps.vht) p += itl_caps_build_vht(p, fastAllow160);
         if (fastHe) p += itl_caps_build_he(p, !g2, fastAllow160);
         static const uint8_t wmm[9] = {0xdd, 0x07, 0x00, 0x50, 0xf2, 0x02, 0x00, 0x01, 0x00};   // WMM information element: we are QoS-capable
@@ -733,6 +736,7 @@ int itlmt7902::m3Run1()
     removeProperty("wifi-last-mgmt-tx");
     removeProperty("wifi-rx-packet-types");
     removeProperty("wifi-completion-diag");
+    removeProperty("wifi-rate-profile");
     removeProperty("wifi-txs-raw");
     removeProperty("wifi-txfree-raw");
     removeProperty("wifi-hw-tx");
@@ -815,6 +819,10 @@ int itlmt7902::m3Run1()
 
     // step 2: firmware / hardware prep, BSS + STA records in the "not associated" state, ROC on the AP's channel
     m3ParseAp();
+    if (!apSupp && !apCck) {
+        m3Publish("rates-fail");
+        return ITL_EINVAL;
+    }
     if (!mt7902_join_rsn(apRsn,apRsnLen)) {
         m3log("unsupported RSN: requires WPA2-PSK, CCMP group/pairwise, optional PMF");
         bzero(m3pmk,sizeof(m3pmk));

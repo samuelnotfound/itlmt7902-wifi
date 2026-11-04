@@ -172,7 +172,7 @@ bool itlmt7902::start(IOService *provider)
     nativeLock = IOLockAlloc();
     if (!workerLock || !txLock || !cmdLock || !nativeLock) return false;
     nativeMode = false; // Ethernet/app control only; stage 3 is an opt-in connection test.
-    setProperty("port-version","0.2.11-connection-test");
+    setProperty("port-version","0.2.13-connection-test");
     setProperty("port-scope","connection-test");
     setProperty("scan-supported",kOSBooleanFalse);
     setProperty("join-supported",kOSBooleanFalse);

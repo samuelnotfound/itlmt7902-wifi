@@ -5,8 +5,74 @@
 #include <cstring>
 #include <cstdio>
 #include <initializer_list>
+static void test_legacy_rates()
+{
+    // Observed failure profile: all OFDM rates, no CCK and no basic markers.
+    const uint8_t ofdm[]={1,8,12,18,24,36,48,72,96,108};
+    Mt7902LegacyRates r={};
+    for (uint8_t channel:{1,44}) {
+        assert(mt7902_parse_legacy_rates(ofdm,sizeof(ofdm),channel,&r));
+        assert(r.supported_cck==0 && r.supported_ofdm==255 && r.basic_cck==0);
+        assert(r.basic_ofdm==1 && r.basic_fallback);
+        uint8_t encoded[12]; memset(encoded,0xa5,sizeof(encoded));
+        assert(mt7902_encode_legacy_rates(encoded+1,10,r)==10);
+        assert(encoded[0]==0xa5 && encoded[11]==0xa5 && encoded[3]==0x8c);
+        assert(!memcmp(encoded+4,ofdm+3,7));
+    }
+    // Hardware-working hotspot profile must retain the same association rates.
+    const uint8_t mixed[]={1,8,0x82,0x84,0x8b,0x96,12,18,24,36,50,4,48,72,96,108};
+    assert(mt7902_parse_legacy_rates(mixed,sizeof(mixed),1,&r));
+    assert(r.supported_cck==15 && r.basic_cck==15 && !r.basic_ofdm && !r.basic_fallback);
+    uint8_t encoded[18]; memset(encoded,0xa5,sizeof(encoded));
+    assert(mt7902_encode_legacy_rates(encoded+1,16,r)==16);
+    assert(!memcmp(encoded+1,mixed,16) && encoded[0]==0xa5 && encoded[17]==0xa5);
+    for (size_t cap=0;cap<16;cap++) {
+        memset(encoded,0xa5,sizeof(encoded));
+        assert(!mt7902_encode_legacy_rates(encoded+1,cap,r));
+        for (uint8_t b:encoded) assert(b==0xa5);
+    }
+    // Lowest actual bitrate, not first array entry: 6 Mbps beats CCK 11 Mbps.
+    const uint8_t unsorted[]={1,2,22,12};
+    assert(mt7902_parse_legacy_rates(unsorted,sizeof(unsorted),1,&r));
+    assert(r.basic_cck==0 && r.basic_ofdm==1 && r.basic_fallback);
+    const uint8_t marked[]={1,3,12,0x98,48};
+    assert(mt7902_parse_legacy_rates(marked,sizeof(marked),44,&r));
+    assert(r.basic_ofdm==4 && !r.basic_fallback);
+    const uint8_t cckOnly[]={1,2,0x82,0x84}, selectorOnly[]={1,1,255}, truncated[]={1,8,12};
+    assert(!mt7902_parse_legacy_rates(cckOnly,sizeof(cckOnly),44,&r));
+    assert(!mt7902_parse_legacy_rates(selectorOnly,sizeof(selectorOnly),1,&r));
+    assert(!mt7902_parse_legacy_rates(truncated,sizeof(truncated),1,&r));
+    assert(!mt7902_parse_legacy_rates(ofdm,1,1,&r));
+    assert(!mt7902_parse_legacy_rates(nullptr,0,1,&r));
+    assert(!mt7902_parse_legacy_rates(ofdm,sizeof(ofdm),0,&r));
+    assert(!mt7902_parse_legacy_rates(ofdm,sizeof(ofdm),1,nullptr));
+    const uint8_t values[]={2,4,11,22,12,18,24,36,48,72,96,108};
+    // Every nonempty legacy mask: inferred basic rate belongs to the offered set
+    // and is its slowest bitrate. Encoded association advertises no extra rates.
+    for (unsigned mask=1;mask<4096;mask++) {
+        uint8_t ies[14]={1,0}; unsigned minimum=255;
+        for (unsigned i=0;i<12;i++) if (mask&(1u<<i)) {
+            ies[2+ies[1]++]=values[i];
+            if (values[i]<minimum) minimum=values[i];
+        }
+        assert(mt7902_parse_legacy_rates(ies,(size_t)ies[1]+2,1,&r));
+        assert(r.supported_cck==(mask&15) && r.supported_ofdm==(mask>>4));
+        assert(r.basic_fallback);
+        unsigned basics=0;
+        for (unsigned i=0;i<12;i++) if ((i<4?r.basic_cck:r.basic_ofdm)&(1u<<(i<4?i:i-4))) {
+            assert(values[i]==minimum); basics++;
+        }
+        assert(basics==1);
+        uint8_t wire[16]; const size_t bytes=mt7902_encode_legacy_rates(wire,sizeof(wire),r);
+        Mt7902LegacyRates roundtrip={};
+        assert(bytes && mt7902_parse_legacy_rates(wire,bytes,1,&roundtrip));
+        assert(roundtrip.supported_cck==r.supported_cck && roundtrip.supported_ofdm==r.supported_ofdm);
+        assert(roundtrip.basic_cck==r.basic_cck && roundtrip.basic_ofdm==r.basic_ofdm && !roundtrip.basic_fallback);
+    }
+}
 int main()
 {
+    test_legacy_rates();
     const uint8_t rsn[]={48,20,1,0,0,15,172,4,1,0,0,15,172,4,1,0,0,15,172,2,0,0};
     assert(mt7902_join_rsn(rsn,sizeof(rsn)));
     assert(!mt7902_join_rsn(nullptr,sizeof(rsn)));
@@ -99,7 +165,24 @@ int main()
     assert(!mt7902_encode_device_info(device,16,zeroMac));
     assert(!mt7902_encode_device_info(device,16,groupMac));
     assert(!mt7902_encode_device_info(device,16,broadcastMac));
-    puts("join policy/RSN/domain/SPE tests passed");
+    uint8_t ht[30]; memset(ht,0xa5,sizeof(ht));
+    const uint8_t htExpected[28]={45,26,12,0,20,255,0,0,0,0,0,0,0,0,0,0,0,1};
+    assert(mt7902_encode_ht20(ht+1,28,255)==28);
+    assert(!memcmp(ht+1,htExpected,28) && ht[0]==0xa5 && ht[29]==0xa5);
+    assert(mt7902_ht20_rate(255)==65 && mt7902_ht20_rate(1)==6 && mt7902_ht20_rate(0)==0);
+    for (unsigned mask=1;mask<256;mask++) {
+        assert(mt7902_encode_ht20(ht+1,28,(uint8_t)mask)==28);
+        assert(ht[6]==mask && ht[7]==0 && ht[18]==1);
+        assert((ht[3]&0x63)==0 && ht[4]==0);
+    }
+    for (size_t n=0;n<28;n++) {
+        memset(ht,0xa5,sizeof(ht));
+        assert(!mt7902_encode_ht20(ht+1,n,255));
+        for (uint8_t byte:ht) assert(byte==0xa5);
+    }
+    assert(!mt7902_encode_ht20(nullptr,28,255));
+    assert(!mt7902_encode_ht20(ht,28,0));
+    puts("join policy/RSN/domain/SPE/legacy rates/HT20 tests passed");
     uint8_t reply[44]={}; reply[3]=0x38; reply[28]=5;
     reply[36]=0x90; reply[37]=0x40; reply[38]=0x0e; reply[39]=0x82;
     reply[40]=0x78; reply[41]=0x56; reply[42]=0x34; reply[43]=0x12;

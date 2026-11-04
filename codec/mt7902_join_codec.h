@@ -2,11 +2,25 @@
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
-// First connection checkpoint: legacy 20 MHz, non-DFS, WPA2-PSK/CCMP only.
+// Connection checkpoint: legacy/HT20, non-DFS, WPA2-PSK/CCMP only.
 bool mt7902_join_channel(uint8_t channel);
 bool mt7902_join_rsn(const uint8_t *ie, size_t length);
 size_t mt7902_encode_join_domain(uint8_t *out, size_t capacity, uint8_t channel);
 uint8_t mt7902_fixed_spe(uint8_t chain_mask);
+struct Mt7902LegacyRates {
+    uint8_t supported_cck, supported_ofdm, basic_cck, basic_ofdm;
+    bool basic_fallback;
+};
+// Parse Supported/Extended Supported Rates; never invent unsupported rates.
+// Missing basic flags fall back to the slowest supported rate, as mac80211 does.
+bool mt7902_parse_legacy_rates(const uint8_t *ies, size_t length, uint8_t channel,
+                               Mt7902LegacyRates *out);
+// Association rate elements, limited to the AP/driver intersection.
+size_t mt7902_encode_legacy_rates(uint8_t *out, size_t capacity,
+                                  const Mt7902LegacyRates &rates);
+// One stream, HT20, long GI; no LDPC/STBC/40 MHz or two-stream MCS claims.
+size_t mt7902_encode_ht20(uint8_t *out, size_t capacity, uint8_t mcs_mask);
+uint32_t mt7902_ht20_rate(uint8_t mcs_mask);
 // mt76_connac_mcu_set_deep_sleep(false): CE CHIP_CONFIG, 328-byte payload.
 size_t mt7902_encode_keep_awake(uint8_t *out, size_t capacity);
 // UNI DEV_INFO_UPDATE: activate OMAC0/band0 with the firmware-reported MAC.
