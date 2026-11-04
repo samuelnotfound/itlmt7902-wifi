@@ -48,6 +48,8 @@ required on macOS. Keep the old EFI as a recovery option.
 
 The combined **itlmt7902-HeliPort-0.2.13.zip** has the driver, app, notices and log
 collector. The app-only ZIP is preferable when you already have the working driver.
+For a driver update with HeliPort 2.0.2 already installed, use the separate
+**itlmt7902.kext-0.2.13.zip**; it includes the kext, release notes and licenses.
 
 ## Source layout and GitHub linked folders
 

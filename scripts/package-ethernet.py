@@ -12,6 +12,7 @@ stage.mkdir(parents=True)
 for source in (r/'build/itlmt7902.kext',app): shutil.copytree(source,stage/source.name,symlinks=True)
 subprocess.run(['codesign','--verify','--deep','--strict',str(stage/app.name)],check=True)
 for name in ('README.md','LICENSE','NOTICE.md'): shutil.copy2(r/name,stage/name)
+shutil.copytree(r/'docs',stage/'docs')
 shutil.copy2(r/'scripts/collect-logs.sh',stage/'collect-logs.sh')
 licenses=stage/'licenses'; licenses.mkdir()
 for source in (r/'fw/LICENCE.mediatek',r/'fw/SHA256SUMS',r/'licenses/mt76-LICENSE.txt'):
@@ -39,6 +40,8 @@ with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
   elif p.is_file(): z.write(p,p.relative_to(stage))
 with zipfile.ZipFile(archive) as z: assert z.testzip() is None
 appzip=dist/'HeliPort-MT7902.zip'; shutil.copy2(r/'userspace/HeliPort/build/dist/HeliPort-MT7902.zip',appzip)
-(dist/'ETHERNET-SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in (archive,appzip)))
+kextzip=dist/f'itlmt7902.kext-{version}.zip'
+assert kextzip.is_file() # separately checked by check-release.py before this packager.
+(dist/'ETHERNET-SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in (archive,appzip,kextzip)))
 (dist/'ethernet-build-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
 print(archive)

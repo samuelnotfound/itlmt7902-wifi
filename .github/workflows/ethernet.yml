@@ -53,6 +53,7 @@ jobs:
           path: |
             dist/itlmt7902-HeliPort-*.zip
             dist/HeliPort-MT7902.zip
+            dist/itlmt7902.kext-*.zip
             dist/ETHERNET-SHA256SUMS.txt
             dist/ethernet-build-manifest.json
           if-no-files-found: error
