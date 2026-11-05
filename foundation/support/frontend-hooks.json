@@ -1,0 +1,4 @@
+{
+  "__fCommandGate": "The Ethernet frontend owns the command gate used by upstream timeout and if_input glue. It must outlive all stack timers, queues and receive callbacks.",
+  "__fWorkloop": "The Ethernet frontend owns the timer work loop. Stop and detach timers before clearing or releasing this pointer."
+}

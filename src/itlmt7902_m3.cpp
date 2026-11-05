@@ -164,6 +164,9 @@ void itlmt7902::m3Event(const uint8_t *ev, uint32_t len)
         m3log("roc grant bss=%u tok=%u status=%u", ev[44], ev[45], ev[46]);
         Mt7902RocGrant grant={}; char detail[256];
         if (mt7902_decode_roc_grant(ev,len,M3_BSS_IDX,rocTok,&grant)) {
+            lastRocGrant=grant;
+            lastRocGrantMs=nowMs();
+            lastRocGrantValid=true;
             const bool matches=grant.channel==tgtCh && grant.band==(tgtCh>14?2:1) &&
                 grant.width==0 && grant.center==tgtCh && !grant.center2 && !grant.request_type;
             snprintf(detail,sizeof(detail),"bss=%u token=%u status=%u channel=%u band=%u width=%u center=%u/%u request=%u interval_ms=%u requested_channel=%u matches=%u",
@@ -551,6 +554,9 @@ int itlmt7902::m3StaRemove()
 // ---------------------------------------------------------------------------------------------
 int itlmt7902::m3Roc(bool acquire)
 {
+    // Typed diagnostic snapshot for the new executor. Existing ROC policy is
+    // unchanged; a new acquire or abort invalidates every earlier grant.
+    lastRocGrantValid=false;
     uint8_t req[4 + 24];
     bzero(req, sizeof(req));
     uint8_t *t = req + 4;

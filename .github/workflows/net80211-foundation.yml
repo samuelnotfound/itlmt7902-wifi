@@ -9,7 +9,24 @@ concurrency:
   group: mt7902-net80211-foundation-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check-release.py
+      - run: python3 -B foundation/support/test_check_symbols.py
+      - run: |
+          bash tests/run_all.sh
+          bash tests/run_net80211_session_tests.sh
+          bash tests/run_net80211_rx_tests.sh
+          bash tests/run_net80211_key_tests.sh
+        env:
+          CXX: clang++
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
   foundation:
+    needs: host-tests
     runs-on: macos-15-intel
     timeout-minutes: 20
     env:
@@ -27,6 +44,7 @@ jobs:
       - name: Compile upstream MAC foundation
         run: |
           mkdir -p build/net80211-foundation
+          python3 -B foundation/test_stage_net80211_pae.py
           bash scripts/build-net80211-foundation.sh > build/net80211-foundation/compile.log 2>&1 || { tail -100 build/net80211-foundation/compile.log; exit 1; }
       - uses: actions/upload-artifact@v4
         if: always()
@@ -36,5 +54,8 @@ jobs:
             build/net80211-foundation/compile.log
             build/net80211-foundation/manifest.json
             build/net80211-foundation/defined-symbols.txt
+            build/net80211-foundation/undefined-symbols.txt
+            build/net80211-foundation/compiled-sources.txt
+            build/net80211-foundation/staged/pae-shim-manifest.json
             external/itlwm/LICENSE
           if-no-files-found: error

@@ -16,9 +16,11 @@
 #include "itl_native_bridge.h"
 #include "../codec/mt7902_scan_codec.h"
 #include "../codec/mt7902_mgmt_wait.h"
+#include "../codec/mt7902_join_codec.h"
 
 class itlmt7902Eth;
 class IOUserClient;
+class Mt7902Net80211Hardware;
 
 // Per-frame options for m3Tx (everything defaults to the verified legacy behaviour: fixed 6 Mb/s, management queue)
 struct M3TxOpt {
@@ -75,6 +77,7 @@ public:
     IOReturn ucDisconnect();
 
 private:
+    friend class Mt7902Net80211Hardware;
     bool busMasterOn = false;
     bool quiesceHardware();
     bool stopping = false, workerRunning = false, firmwareFault = false;
@@ -194,6 +197,9 @@ private:
     void m3ParseAp();
     volatile bool rocGrant = false;
     uint8_t rocTok = 0, rocStatus = 0xff;
+    Mt7902RocGrant lastRocGrant = {};
+    uint32_t lastRocGrantMs = 0;
+    bool lastRocGrantValid = false;
     bool m3Open = false;                     // Explicit empty-key request, confirmed against beacon security.
     uint8_t m3cipher = 0;                    // 0 = open, 4 = CCMP (BSS_INFO sec TLV)
     uint8_t apSupp = 0, apBasic = 0;         // OFDM rate bitmaps (6,9,12,18,24,36,48,54 -> bit 0..7)
