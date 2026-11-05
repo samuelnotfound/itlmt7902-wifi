@@ -108,10 +108,10 @@ xcrun clang++ -arch x86_64 -nostdlib -Wl,-r -o "$output/net80211-relocatable.o" 
 xcrun nm -gjU "$output/net80211-relocatable.o" > "$output/defined-symbols.txt"
 xcrun nm -ju "$output/net80211-relocatable.o" > "$output/undefined-symbols.txt"
 python3 -B foundation/support/test_check_symbols.py
-audit_flags=()
+audit_command=(python3 -B foundation/support/check_symbols.py --output "$output"
+    --source-list "$output/compiled-sources.txt"
+    --frontend-hooks foundation/support/frontend-hooks.json)
 if [[ -n "${NET80211_KERNEL_EXPORT_CATALOG:-}" ]]; then
-    audit_flags+=(--kernel-export-catalog "$NET80211_KERNEL_EXPORT_CATALOG")
+    audit_command+=(--kernel-export-catalog "$NET80211_KERNEL_EXPORT_CATALOG")
 fi
-python3 -B foundation/support/check_symbols.py --output "$output" \
-    --source-list "$output/compiled-sources.txt" \
-    --frontend-hooks foundation/support/frontend-hooks.json "${audit_flags[@]}"
+"${audit_command[@]}"
