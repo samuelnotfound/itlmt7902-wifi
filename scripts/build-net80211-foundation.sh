@@ -102,7 +102,7 @@ from pathlib import Path
 import sys
 source=Path(sys.argv[1]).read_text()
 assert source.count('"0.2.16"')==1
-Path(sys.argv[2]).write_text(source.replace('"0.2.16"','"0.3.0"'))
+Path(sys.argv[2]).write_text(source.replace('"0.2.16"','"0.3.1"'))
 PY
         input="$output/runtime-kmod-info.c"
     fi
@@ -135,8 +135,8 @@ python3 - "$kext/Contents/Info.plist" <<'PY'
 import plistlib,sys
 from pathlib import Path
 info=plistlib.loads(Path('src/Info.plist').read_bytes())
-info['CFBundleVersion']=info['CFBundleShortVersionString']='0.3.0'
-info['OSBundleCompatibleVersion']='0.3.0'
+info['CFBundleVersion']=info['CFBundleShortVersionString']='0.3.1'
+info['OSBundleCompatibleVersion']='0.3.1'
 info['IOKitPersonalities']['itlmt7902']['CFBundleIdentifier']=info['CFBundleIdentifier']
 Path(sys.argv[1]).write_bytes(plistlib.dumps(info))
 PY

@@ -22,6 +22,7 @@ jobs:
           bash tests/run_net80211_rx_tests.sh
           bash tests/run_net80211_key_tests.sh
           bash tests/run_net80211_mailbox_tests.sh
+          bash tests/run_net80211_recovery_tests.sh
         env:
           CXX: clang++
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1

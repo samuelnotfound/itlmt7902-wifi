@@ -55,7 +55,7 @@ int Mt7902Net80211Hardware::bindSession(uint32_t epoch)
         driver_.m3wantFc || driver_.m3wantEapol ||
         driver_.cmdPending(itlmt7902::CMD_JOIN|itlmt7902::CMD_DISCONNECT)) return EBUSY;
     epoch_=epoch; state_=IEEE80211_S_INIT;
-    prepared_=associated_=privacy_=false; channel_=0;
+    prepared_=associated_=privacy_=touched_=false; channel_=0;
     bzero(bssid_,sizeof(bssid_)); forgetKeys();
     return 0;
 }
@@ -101,6 +101,8 @@ int Mt7902Net80211Hardware::prepare(const Mt7902Net80211State &s)
     }
     Mt7902LegacyRates rates={};
     if (!mt7902_parse_legacy_rates(ies,(size_t)s.rates.rs_nrates+2,s.channel,&rates)) return EINVAL;
+    // Keep this latched even after a peer is removed: old TX DMA may still exist.
+    touched_=true;
     memcpy(bssid_,s.bssid,6); channel_=s.channel; privacy_=s.privacy;
     memcpy(driver_.tgtBssid,s.bssid,6); driver_.tgtCh=s.channel;
     driver_.tgtCap=s.capability; driver_.tgtBcnInt=s.beacon_interval;
@@ -181,9 +183,11 @@ int Mt7902Net80211Hardware::changeState(uint32_t epoch,const Mt7902Net80211State
         memcmp(s.mac,driver_.mac,6) || s.privacy!=privacy_) return EINVAL;
     if (s.state==IEEE80211_S_ASSOC) {
         if (state_!=IEEE80211_S_AUTH) return EINVAL;
-        // Renew the bounded JOIN grant before the stack emits association.
-        if (driver_.m3Roc(false) || driver_.m3AcquireRoc() || !grantUsable() ||
-            driver_.m3Sta(1,false,0)) return failed(EIO);
+        // AUTH and ASSOC are one managed exchange. Keep its live JOIN grant;
+        // aborting/reacquiring here tears down the channel context mid-exchange.
+        // Like mt7921_mac_sta_event, update firmware to ASSOC only after the
+        // association response (net80211 RUN), not on a local ASSOC request.
+        if (!grantUsable()) return ETIMEDOUT;
         state_=IEEE80211_S_ASSOC; return 0;
     }
     if (s.state==IEEE80211_S_RUN) {
@@ -192,7 +196,7 @@ int Mt7902Net80211Hardware::changeState(uint32_t epoch,const Mt7902Net80211State
         if (state_!=IEEE80211_S_ASSOC || !aid || aid>2007 ||
             ((s.association_id&0xc000)!=0 && (s.association_id&0xc000)!=0xc000)) return EINVAL;
         driver_.m3aid=aid;
-        if (driver_.m3Bss(true) || driver_.m3Sta(2,false,aid) || driver_.m3Roc(false))
+        if (driver_.m3Bss(true) || driver_.m3Sta(2,false,aid))
             return failed(EIO);
         associated_=true; driver_.m3reachedAssoc=true; state_=IEEE80211_S_RUN;
         return 0;
@@ -234,6 +238,9 @@ int Mt7902Net80211Hardware::setAuthorized(uint32_t epoch,bool authorized)
     const int valid=check(epoch); if (valid) return valid;
     if (authorized && (!associated_ || state_!=IEEE80211_S_RUN ||
         (privacy_ && (!pair_.valid || !group_.valid)))) return EACCES;
+    // The MT7902 reference holds the JOIN grant across the 4-way handshake.
+    // Release once authorization is complete, rather than on entering RUN.
+    if (authorized && driver_.lastRocGrantValid && driver_.m3Roc(false)) return failed(EIO);
     driver_.m3linkUp=authorized;
     // The coordinator feeds raw RX exclusively to net80211. Old decapsulation
     // and old EAPOL queues must never observe frames in the new stack session.
@@ -272,6 +279,14 @@ int Mt7902Net80211Hardware::transmit(uint32_t epoch,const uint8_t *frame,size_t 
     if (accepted) return 0; // The complete payload is now copied into owned DMA.
     return driver_.stTxNoSlot!=noSlot?EAGAIN:EIO;
 }
+int Mt7902Net80211Hardware::releaseUnusedScanSession()
+{
+    const int valid=check(epoch_); if(valid)return valid;
+    if(touched_ || prepared_ || associated_ || state_>IEEE80211_S_SCAN ||
+        pair_.valid || group_.valid) return EBUSY;
+    epoch_=0;state_=IEEE80211_S_INIT;
+    return 0;
+}
 int Mt7902Net80211Hardware::releaseAfterQuiesce()
 {
     if (current_thread()!=owner_) return EPERM;
@@ -281,7 +296,7 @@ int Mt7902Net80211Hardware::releaseAfterQuiesce()
         driver_.txData.desc.va) return EBUSY;
     driver_.m3linkUp=false; driver_.m3dataOn=false; driver_.m3wantEapol=false;
     driver_.m3prepared=false; driver_.m3wantFc=0;
-    prepared_=associated_=privacy_=false; epoch_=0; channel_=0;
+    prepared_=associated_=privacy_=touched_=false; epoch_=0; channel_=0;
     bzero(bssid_,sizeof(bssid_)); forgetKeys(); state_=IEEE80211_S_INIT;
     return 0;
 }

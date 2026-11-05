@@ -127,6 +127,23 @@ int main()
         assert(!result.hardware_decrypted && !result.pn_valid && !result.rssi_valid && !result.timestamp_valid);
     }
     unchangedFailure(packet(raw,0),MT7902_NET80211_HW_CCMP,MT7902_NET80211_RX_PN_MISSING);
+    // Synthetic successful auth/association wire replies must survive the
+    // normalizer byte-for-byte, including fixed status/AID and rate elements.
+    for(const auto &f:std::vector<std::vector<uint8_t>>{
+        {0xb0,0,0,0, 2,1,2,3,4,5, 2,6,7,8,9,10, 2,6,7,8,9,10, 0x10,0,
+         0,0,2,0,0,0},
+        {0x10,0,0,0, 2,1,2,3,4,5, 2,6,7,8,9,10, 2,6,7,8,9,10, 0x20,0,
+         0x31,0x04,0,0,1,0xc0,1,4,0x82,0x84,0x8b,0x96}}) {
+        const auto p=packet(f,G2|G3,0);
+        assert(mt7902_net80211_normalize_rx(p.data(),(uint32_t)p.size(),MT7902_NET80211_HW_CCMP,
+            output,sizeof(output),&result)==MT7902_NET80211_RX_OK);
+        assert(result.length==f.size() && !memcmp(output,f.data(),f.size()));
+        assert(!result.hardware_decrypted && result.timestamp_valid);
+        for(size_t n=1;n<p.size();n++) {
+            std::vector<uint8_t> truncated(p.begin(),p.begin()+n);
+            unchangedFailure(truncated,MT7902_NET80211_HW_CCMP,MT7902_NET80211_RX_DESCRIPTOR);
+        }
+    }
     unchangedFailure(packet(raw,G1,2),MT7902_NET80211_HW_CCMP,MT7902_NET80211_RX_CRYPTO);
     unchangedFailure(packet(frame(0x08,2),G1),MT7902_NET80211_HW_CCMP,MT7902_NET80211_RX_CRYPTO);
     unchangedFailure(packet(raw),(Mt7902Net80211RxCrypto)99,MT7902_NET80211_RX_ARGUMENT);

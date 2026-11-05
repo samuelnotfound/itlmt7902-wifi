@@ -1,10 +1,10 @@
 # OpenIntelWireless net80211 integration branch
 
 This branch connects the official itlwm wireless stack to the MT7902 Ethernet
-port. The **0.3.0 net80211 runtime candidate** owns the Ethernet workloop,
+port. The **0.3.1 net80211 runtime candidate** owns the Ethernet workloop,
 radio worker, bounded command/RX mailboxes and HeliPort ABI-v1 requests. Its
 exclusive build bypasses the old connection supervisor.
-See [candidate installation and validation](docs/NET80211-0.3.0.md) and
+See [candidate installation and validation](docs/NET80211-0.3.1.md) and
 [ownership contracts](foundation/README.md). The foundation Actions workflow
 builds a kernel bundle and source/license package; hardware loading and
 connections remain unverified. The `codex/mt7902-ethernet` branch retains the

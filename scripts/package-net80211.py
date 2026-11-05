@@ -12,7 +12,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build/net80211-foundation'
-VERSION = '0.3.0'
+VERSION = '0.3.1'
 PIN = '53c51c2cdd6e4b69beb91f310d74c53422b0f8bd'
 
 
@@ -47,7 +47,7 @@ def main():
     magic, cpu, _, kind = struct.unpack_from('<IIII', binary)
     assert (magic, cpu, kind) == (0xfeedfacf, 0x01000007, 11), 'Expected x86_64 MH_KEXT_BUNDLE'
     assert VERSION.encode() + b'\0' in binary
-    assert b'0.3.0-net80211\0' in binary and b'net80211-runtime-test\0' in binary
+    assert VERSION.encode()+b'-net80211\0' in binary and b'net80211-runtime-test\0' in binary
     firmware = {}
     for line in (ROOT / 'fw/SHA256SUMS').read_text().splitlines():
         expected, name = line.split()
@@ -71,7 +71,7 @@ def main():
     shutil.copytree(bundle, package / bundle.name)
     for name in ('LICENSE', 'NOTICE.md'):
         shutil.copy2(ROOT / name, package / name)
-    shutil.copy2(ROOT / 'docs/NET80211-0.3.0.md', package / 'README.md')
+    shutil.copy2(ROOT / ('docs/NET80211-' + VERSION + '.md'), package / 'README.md')
     shutil.copy2(ROOT / 'scripts/collect-logs.sh', package / 'collect-logs.sh')
     shutil.copytree(ROOT / 'licenses', package / 'licenses')
     shutil.copy2(ROOT / 'external/itlwm/LICENSE', package / 'licenses/itlwm-GPL-2.0.txt')

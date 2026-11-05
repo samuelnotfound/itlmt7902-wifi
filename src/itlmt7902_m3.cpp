@@ -1150,6 +1150,14 @@ bool itlmt7902::chipRecover()
     clcCc[0] = 0;                                            // ... nor the CLC / SKU power tables
     if (shouldStop() || !quiesceHardware()) return false;
     firmwareFault=false;
+    // Recovery may start after firmware has taken low-power ownership. The
+    // initial attach acquired ownership, but the old recovery entry did not.
+    if(!driverOwn()) {
+        firmwareFault=true;
+        setProperty("firmware-ready",kOSBooleanFalse);
+        evLog("recover #%u failed: driver ownership",recoverCnt);
+        return false;
+    }
     int rc = m1Run();
     m3log("recover: M1 rc=%d", rc);
     if (!rc) {

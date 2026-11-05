@@ -13,8 +13,8 @@ and backend methods. Residual kernel imports are recorded, not assumed verified.
 The runtime coordinator now binds the Ethernet instance, hardware worker,
 bounded mailboxes and completions. `ITL_NET80211_RUNTIME` bypasses the old m3
 supervisor; the standalone build remains separate. This target links and packages
-the 0.3.0 net80211 kernel bundle. Loading and connection behavior require hardware
-validation; see [candidate instructions](../docs/NET80211-0.3.0.md).
+the 0.3.1 net80211 kernel bundle. Loading and connection behavior require hardware
+validation; see [candidate instructions](../docs/NET80211-0.3.1.md).
 
 Implemented contracts:
 
@@ -73,10 +73,14 @@ may still depend on the MT7902 radio/MCU backend. Retain the hotspot capture as 
 regression reference.
 
 Build: `MACKERNELSDK=/path/to/MacKernelSDK bash scripts/build-net80211-foundation.sh`.
-The output is `build/net80211-foundation/dist/itlmt7902-net80211-0.3.0.zip`.
+The output is `build/net80211-foundation/dist/itlmt7902-net80211-0.3.1.zip`.
 This candidate defaults to stage 3 and uses the existing HeliPort-MT7902 2.1.5.
 Reset pauses the stack under its gate, then quiesces DMA on the worker before
-releasing old references and epochs. New joins recover firmware before reuse.
+releasing old references and epochs that touched association/TX hardware. An
+untouched passive-list epoch can be released without resetting healthy firmware.
+AUTH/ASSOC retain their channel grant; firmware ASSOC is programmed after the
+association response, with JOIN ROC held until port authorization. Two failed
+bootstrap recoveries stop the radio rather than permitting unlimited UI retries.
 The stack gate never waits for firmware; callbacks copy into bounded queues.
 No upstream systq thread is started: this STA build uses gated timers and has no
 systq task producers. Hardware validation, RF correctness and exact Tahoe kernel

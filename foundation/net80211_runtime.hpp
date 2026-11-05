@@ -2,6 +2,7 @@
 #pragma once
 #include "net80211_bridge.hpp"
 #include "net80211_mailbox.h"
+#include "net80211_recovery.h"
 #include "mt7902_net80211_hardware.hpp"
 #include "mt7902_net80211_rx.h"
 #include <IOKit/IOLocks.h>
@@ -54,6 +55,8 @@ private:
     IONetworkMedium *medium_=nullptr;
     bool baseStarted_=false,attached_=false,used_=false,radioReady_=true,authorized_=false,joining_=false,quiesced_=true;
     uint32_t epoch_=0,lastPoll_=0,joinStart_=0;
+    uint32_t rxRejected_[9]={};
+    Mt7902NetRecovery recovery_;
     int failure_=0;
     bool fatal_=false;
     uint8_t mac_[6] = {}, ethernet_[1600] = {};
@@ -67,6 +70,7 @@ private:
     void process();
     void serviceStack();
     void failConnection(int);
+    void managementDiagnostic(const uint8_t *,size_t,int,const char *);
     static int state(void *,uint64_t,const Mt7902Net80211State &);
     static int key(void *,uint64_t,const Mt7902Net80211Key &);
     static int tx(void *,uint64_t,const uint8_t *,size_t,const Mt7902Net80211Tx &);

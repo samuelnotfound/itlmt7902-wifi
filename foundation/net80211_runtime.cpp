@@ -2,6 +2,7 @@
 #include "net80211_runtime.hpp"
 #include "../src/itlmt7902.hpp"
 #include "../src/itl_wpa.h"
+#include "../codec/mt7902_rx_codec.h"
 #include <IOKit/network/IONetworkMedium.h>
 #include <sys/errno.h>
 #include <libkern/libkern.h>
@@ -187,8 +188,16 @@ void Mt7902Net80211Runtime::receiveDMA(const uint8_t *packet,uint32_t length)
 {
     if (!attached_ || !used_ || !radioReady_ || !epoch_) return;
     Mt7902Net80211Rx rx={};
-    if(mt7902_net80211_normalize_rx(packet,length,MT7902_NET80211_HW_CCMP,
-        incoming_.frame,sizeof(incoming_.frame),&rx)!=MT7902_NET80211_RX_OK) return;
+    const auto status=mt7902_net80211_normalize_rx(packet,length,MT7902_NET80211_HW_CCMP,
+        incoming_.frame,sizeof(incoming_.frame),&rx);
+    if(status!=MT7902_NET80211_RX_OK) {
+        if((unsigned)status<9)rxRejected_[status]++;
+        Mt7902RxView view={};
+        if(mt7902_parse_rx_normal(packet,length,&view)==MT7902_RX_OK)
+            managementDiagnostic(packet+view.frame_offset,view.frame_length,(int)status,"RX rejected");
+        return;
+    }
+    managementDiagnostic(incoming_.frame,rx.length,0,"RX");
     IOLockLock(mailbox_);
     incoming_.metadata=rx; incoming_.epoch=epoch_;
     receives_.push(incoming_);
@@ -204,13 +213,42 @@ void Mt7902Net80211Runtime::serviceStack()
         if(receive_.epoch==epoch_) gated(Receive);
     }
     const uint32_t now=driver_->nowMs();
-    if(used_ && now-lastPoll_>=1000) { lastPoll_=now; gated(Poll); }
+    if(used_ && now-lastPoll_>=1000) {
+        lastPoll_=now; gated(Poll);
+        driver_->setProperty("net80211-rx-rejections",rxRejected_,sizeof(rxRejected_));
+    }
+}
+void Mt7902Net80211Runtime::managementDiagnostic(const uint8_t *frame,size_t length,
+    int error,const char *direction)
+{
+    if(!frame || length<24 || (frame[0]&15) || (frame[1]&3))return;
+    const uint8_t subtype=frame[0]>>4;
+    if(subtype!=0 && subtype!=1 && subtype!=11 && subtype!=10 && subtype!=12)return;
+    // Fixed management fields only; never log EAPOL, PMKs or passphrases.
+    const unsigned word0=length>=26?frame[24]|unsigned(frame[25])<<8:0;
+    const unsigned word1=length>=28?frame[26]|unsigned(frame[27])<<8:0;
+    const unsigned word2=length>=30?frame[28]|unsigned(frame[29])<<8:0;
+    driver_->evLog("net80211 %s fc=%02x len=%u fixed=%04x/%04x/%04x normalize=%d",
+        direction,frame[0],(unsigned)length,word0,word1,word2,error);
+    if(subtype==0 && length>=28)
+        driver_->setProperty("net80211-assoc-request",frame,(unsigned)length);
+    if(subtype==1 && length>=30)
+        driver_->setProperty("net80211-assoc-response",frame,(unsigned)length);
 }
 int Mt7902Net80211Runtime::reset(bool recover)
 {
+    if(recover && !radioReady_ && !recovery_.canAttempt(driver_->nowMs()))
+        return recovery_.terminal()?EIO:EAGAIN;
     if(attached_ && used_) gated(Pause);
     authorized_=false; joining_=false;
-    if(used_ || (recover && driver_->firmwareFault)) {
+    // The initial HeliPort list scan has no peer/key/TX DMA ownership. Cancel
+    // that stack epoch without power-cycling healthy firmware on the first join.
+    const bool scanOnly=recover && used_ && !driver_->firmwareFault &&
+        hardware_->bound() && hardware_->releaseUnusedScanSession()==0;
+    if(scanOnly) {
+        if(gated(Reset)){fatal_=true;return EBUSY;}
+        driver_->evLog("net80211 scan epoch released without radio reset");
+    } else if(used_ || !quiesced_ || (recover && driver_->firmwareFault)) {
         // Do not release a stack reference while the old DMA session can run.
         if(!driver_->quiesceHardware()) {fatal_=true;radioReady_=false;return EBUSY;}
         radioReady_=false;
@@ -221,21 +259,33 @@ int Mt7902Net80211Runtime::reset(bool recover)
     purge(); epoch_=0; used_=false;
     __atomic_store_n(&failure_,0,__ATOMIC_RELEASE);
     if(recover && !radioReady_) {
-        if(!driver_->chipRecover()) return EIO;
+        if(!driver_->chipRecover()) {
+            driver_->firmwareFault=true;
+            driver_->setProperty("firmware-ready",kOSBooleanFalse);
+            recovery_.failed(driver_->nowMs());
+            driver_->setProperty("net80211-recovery-failures",recovery_.failures(),32);
+            // A partial bootstrap can have enabled DMA. Quiesce it before
+            // allowing another command; never repeatedly churn live rings.
+            if(!driver_->quiesceHardware()){fatal_=true;quiesced_=false;return EBUSY;}
+            quiesced_=true;
+            if(recovery_.terminal())fatal_=true;
+            return EIO;
+        }
+        recovery_.succeeded();
         driver_->firmwareFault=false; driver_->recoverWanted=false; radioReady_=true;
     }
     return 0;
 }
 int Mt7902Net80211Runtime::scan()
 {
-    if((!radioReady_ || driver_->firmwareFault) && reset(true)) return EIO;
+    if(!radioReady_ || driver_->firmwareFault) {const int error=reset(true);if(error)return error;}
     const int result=gated(Scan);
     if(!result){used_=true;quiesced_=false;epoch_=(uint32_t)gated(Generation);}
     return result;
 }
 int Mt7902Net80211Runtime::join(const char *ssid,const uint8_t *pmk,size_t length)
 {
-    if((used_ || !radioReady_ || driver_->firmwareFault) && reset(true)) return EIO;
+    if(used_ || !radioReady_ || driver_->firmwareFault) {const int error=reset(true);if(error)return error;}
     JoinArgs arguments={ssid,pmk,length};
     int result=gated(Join,&arguments);
     if(!result) {
@@ -249,12 +299,16 @@ int Mt7902Net80211Runtime::join(const char *ssid,const uint8_t *pmk,size_t lengt
 void Mt7902Net80211Runtime::process()
 {
     for(unsigned budget=0;budget<32 && pop();budget++) {
+        if(joining_ && driver_->nowMs()-joinStart_>45000) {
+            bzero(&current_,sizeof(current_));failed(this,ETIMEDOUT);break;
+        }
         if(current_.epoch!=epoch_) { bzero(&current_,sizeof(current_));continue; }
         int error=0;
         if(!hardware_->bound()) error=hardware_->bindSession(epoch_);
         if(!error && current_.kind==State) error=hardware_->changeState(epoch_,current_.state);
         if(!error && current_.kind==Key) error=hardware_->updateKey(epoch_,current_.key);
         if(!error && current_.kind==Tx) {
+            if(current_.tx.management)managementDiagnostic(current_.frame,current_.length,0,"TX");
             error=hardware_->setAuthorized(epoch_,gated(Authorized)==1);
         }
         if(!error && current_.kind==Tx) {
@@ -292,7 +346,9 @@ void Mt7902Net80211Runtime::failConnection(int error)
     driver_->evLog("net80211 failed epoch=%u error=%d",epoch_,error);
     const bool wasJoining=joining_;
     reset(false);
-    driver_->wifiState("failed",wasJoining?"net80211 connection failed; collect driver diagnostics":"net80211 session failed; collect driver diagnostics");
+    driver_->wifiState("failed",fatal_?"Radio recovery stopped; collect driver diagnostics":
+        error==EAGAIN?"Radio recovery cooling down; wait before retrying":
+        wasJoining?"net80211 connection failed; collect driver diagnostics":"net80211 session failed; collect driver diagnostics");
 }
 void Mt7902Net80211Runtime::serve()
 {
@@ -313,7 +369,7 @@ void Mt7902Net80211Runtime::serve()
             driver_->wifiState("connecting","");
             const int error=join(request.ssid,pmk,(length||request.hasPmk)?32:0);
             bzero(pmk,sizeof(pmk)); if(error)failConnection(error);
-        } else if((command&itlmt7902::CMD_SCAN) && !authorized_ && !joining_) {
+        } else if((command&itlmt7902::CMD_SCAN) && !authorized_ && !joining_ && radioReady_ && !driver_->firmwareFault) {
             // HeliPort's periodic list refresh must not interrupt AUTH/ASSOC/RSN.
             const int error=scan(); if(error)failConnection(error);
         }
@@ -356,7 +412,7 @@ void Mt7902Net80211Runtime::free()
 }
 void itlmt7902::net80211Serve()
 {
-    setProperty("port-version","0.3.0-net80211");
+    setProperty("port-version","0.3.1-net80211");
     setProperty("port-scope","net80211-runtime-test");
     auto runtime=OSTypeAlloc(Mt7902Net80211Runtime);
     if(!runtime || !runtime->init(nullptr) || !runtime->setup(this)) {
