@@ -163,6 +163,9 @@ bool itlmt7902::start(IOService *provider)
 {
     if (!super::start(provider)) return false;
     uint32_t stage = 2;
+#ifdef ITL_NET80211_RUNTIME
+    stage = 3; // Runtime candidate defaults to app-controlled connection mode.
+#endif
     uint32_t chip = 0;
     bool fwOwned = false;
     bool runM1 = false;

@@ -3,7 +3,6 @@
 #include "../src/itlmt7902.hpp"
 #include "../src/itl_wpa.h"
 #include <IOKit/network/IONetworkMedium.h>
-#include <sys/_task.h>
 #include <sys/errno.h>
 #include <libkern/libkern.h>
 
@@ -56,7 +55,6 @@ bool Mt7902Net80211Runtime::start(IOService *provider)
     media->release();
     if (!ok || !attachInterface(reinterpret_cast<IONetworkInterface **>(&interface_),true) || !statistics_) return false;
     if (gated(Attach)) return false;
-    attached_=true;
     if (getOutputQueue()) getOutputQueue()->start();
     registerService();
     return true;
@@ -67,6 +65,18 @@ IOReturn Mt7902Net80211Runtime::enable(IONetworkInterface *)
 { if(getOutputQueue())getOutputQueue()->start(); return kIOReturnSuccess; }
 IOReturn Mt7902Net80211Runtime::disable(IONetworkInterface *)
 { if(getOutputQueue()){getOutputQueue()->stop();getOutputQueue()->flush();} return kIOReturnSuccess; }
+IOReturn Mt7902Net80211Runtime::setMulticastMode(bool)
+{ return kIOReturnSuccess; } // The associated receive path already accepts multicast.
+IOReturn Mt7902Net80211Runtime::setMulticastList(IOEthernetAddress *,UInt32)
+{ return kIOReturnSuccess; }
+IOReturn Mt7902Net80211Runtime::getPacketFilters(const OSSymbol *group,UInt32 *filters) const
+{
+    if(group==gIONetworkFilterGroup){
+        *filters=kIOPacketFilterUnicast|kIOPacketFilterBroadcast|kIOPacketFilterMulticast;
+        return kIOReturnSuccess;
+    }
+    return IOEthernetController::getPacketFilters(group,filters);
+}
 UInt32 Mt7902Net80211Runtime::outputPacket(mbuf_t packet,void *)
 {
     if (!packet) return kIOReturnOutputDropped;
@@ -135,13 +145,15 @@ int Mt7902Net80211Runtime::gated(int action,void *argument)
         const int action=(int)(uintptr_t)actionArg;
         switch(action) {
         case Attach: {
-            taskq_init();
+            // This STA bridge has no systq users; its timers run on loop_.
+            // Do not start the upstream Intel backend's global task thread.
             Mt7902Net80211Backend backend={self,state,key,tx,failed};
-            return self->bridge_.initialize(self,self->interface_,self->statistics_,self->loop_,self->gate_,self->mac_,backend);
+            const int error=self->bridge_.initialize(self,self->interface_,self->statistics_,self->loop_,self->gate_,self->mac_,backend);
+            self->attached_=!error;return error;
         }
         case Pause: self->bridge_.pause(); return 0;
         case Reset: return self->bridge_.acknowledgeQuiesced(true);
-        case Shutdown: return self->bridge_.shutdown(true);
+        case Shutdown: {const int error=self->bridge_.shutdown(true);self->attached_=false;return error;}
         case Join: {
             auto args=static_cast<JoinArgs *>(argument);
             return self->bridge_.configureJoin(args->ssid,args->pmk,args->length);
@@ -193,7 +205,7 @@ void Mt7902Net80211Runtime::serviceStack()
 }
 int Mt7902Net80211Runtime::reset(bool recover)
 {
-    if(attached_) gated(Pause);
+    if(attached_ && used_) gated(Pause);
     authorized_=false; joining_=false;
     if(used_ || (recover && driver_->firmwareFault)) {
         // Do not release a stack reference while the old DMA session can run.
@@ -313,10 +325,10 @@ void Mt7902Net80211Runtime::serve()
 void Mt7902Net80211Runtime::stop(IOService *provider)
 {
     if(!quiesced_)return; // Retain every reference if the physical DMA barrier failed.
-    if(attached_) {gated(Shutdown);attached_=false;}
+    if(attached_) gated(Shutdown);
     if(interface_){detachInterface(interface_,true);interface_=nullptr;}
     if(gate_ && loop_)loop_->removeEventSource(gate_);
-    if(runtimeOwner==this){_fCommandGate=nullptr;_fWorkloop=nullptr;__atomic_store_n(&runtimeOwner,nullptr,__ATOMIC_RELEASE);}
+    if(__atomic_load_n(&runtimeOwner,__ATOMIC_ACQUIRE)==this){_fCommandGate=nullptr;_fWorkloop=nullptr;__atomic_store_n(&runtimeOwner,nullptr,__ATOMIC_RELEASE);}
     if(baseStarted_){IOEthernetController::stop(provider);baseStarted_=false;}
 }
 void Mt7902Net80211Runtime::free()
@@ -326,11 +338,13 @@ void Mt7902Net80211Runtime::free()
     if(gate_){gate_->release();gate_=nullptr;}
     if(medium_){medium_->release();medium_=nullptr;}
     if(loop_){loop_->release();loop_=nullptr;}
-    if(runtimeOwner==this){_fCommandGate=nullptr;_fWorkloop=nullptr;__atomic_store_n(&runtimeOwner,nullptr,__ATOMIC_RELEASE);}
+    if(__atomic_load_n(&runtimeOwner,__ATOMIC_ACQUIRE)==this){_fCommandGate=nullptr;_fWorkloop=nullptr;__atomic_store_n(&runtimeOwner,nullptr,__ATOMIC_RELEASE);}
     Mt7902Net80211Controller::free();
 }
 void itlmt7902::net80211Serve()
 {
+    setProperty("port-version","0.3.0-net80211");
+    setProperty("port-scope","net80211-runtime-test");
     auto runtime=OSTypeAlloc(Mt7902Net80211Runtime);
     if(!runtime || !runtime->init(nullptr) || !runtime->setup(this)) {
         if(runtime)runtime->release();wifiState("failed","net80211 allocation failed");return;

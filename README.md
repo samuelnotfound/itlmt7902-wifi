@@ -1,9 +1,15 @@
 # OpenIntelWireless net80211 integration branch
 
-This branch pins and compiles the official itlwm wireless stack for the MT7902
-Ethernet port. [Foundation status and ownership contracts](foundation/README.md).
-The new stack is not yet connected to the active MT7902 driver. Use the
-`codex/mt7902-ethernet` branch for the current packaged driver/app.
+This branch connects the official itlwm wireless stack to the MT7902 Ethernet
+port. The **0.3.0 net80211 runtime candidate** owns the Ethernet workloop,
+radio worker, bounded command/RX mailboxes and HeliPort ABI-v1 requests. Its
+exclusive build bypasses the old connection supervisor.
+See [candidate installation and validation](docs/NET80211-0.3.0.md) and
+[ownership contracts](foundation/README.md). The foundation Actions workflow
+builds a kernel bundle and source/license package; hardware loading and
+connections remain unverified. The `codex/mt7902-ethernet` branch retains the
+separate 0.2.16 driver/app. The baseline documentation below describes that
+older target, including its different boot-argument default.
 
 # itlmt7902-wifi — standalone Ethernet driver + HeliPort UI
 
@@ -33,7 +39,9 @@ See [the release notes](docs/RELEASE-0.2.16.md) and
 Driver ancestry and firmware: hbyonly1's MT7922 port, thanhnndev and contributors'
 MediaTek driver, and the pinned BSD-3-Clause-Clear mt76 references recorded in
 [NOTICE.md](NOTICE.md). HeliPort's UI is from OpenIntelWireless under its own
-retained BSD-3-Clause license. No Intel itlwm kernel driver sources are used.
+retained BSD-3-Clause license. This branch's net80211 target compiles the official
+shared MAC, crypto and compatibility sources under GPL-2.0-or-later, with retained
+per-file notices. Intel hardware backends are excluded from the kernel bundle.
 
 ## Install
 

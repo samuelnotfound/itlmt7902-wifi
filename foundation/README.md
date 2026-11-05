@@ -10,10 +10,11 @@ guards. The build compiles them with the actual upstream stack, compatibility,
 timers, crypto and MT7902 backend; a relocatable link rejects unresolved stack
 and backend methods. Residual kernel imports are recorded, not assumed verified.
 
-The runtime coordinator still needs to bind the Ethernet instance, hardware
-worker, bounded mailboxes and completions, and replace the old m3 supervisor.
-These new components are not activated by the current 0.2.16 driver. This target
-produces build evidence rather than an installable kext.
+The runtime coordinator now binds the Ethernet instance, hardware worker,
+bounded mailboxes and completions. `ITL_NET80211_RUNTIME` bypasses the old m3
+supervisor; the standalone build remains separate. This target links and packages
+the 0.3.0 net80211 kernel bundle. Loading and connection behavior require hardware
+validation; see [candidate instructions](../docs/NET80211-0.3.0.md).
 
 Implemented contracts:
 
@@ -45,7 +46,7 @@ macOS IONetworkingFamily; OpenBSD net80211 is compiled source within the driver.
 
 Intel IWM/IWX/IWN hardware backends are excluded from the foundation archive.
 
-Integration requirements:
+Runtime contracts implemented in the bridge/coordinator:
 
 1. Connect the Ethernet frontend to `ieee80211com`/`ifnet`. Populate real NIC
    channels/rates rather than Intel defaults.
@@ -71,5 +72,12 @@ the missing Ramos authentication response, which precedes password validation an
 may still depend on the MT7902 radio/MCU backend. Retain the hotspot capture as a
 regression reference.
 
-Build-only: `MACKERNELSDK=/path/to/MacKernelSDK bash scripts/build-net80211-foundation.sh`.
-This target's artifacts are evidence, not files to install in OpenCore.
+Build: `MACKERNELSDK=/path/to/MacKernelSDK bash scripts/build-net80211-foundation.sh`.
+The output is `build/net80211-foundation/dist/itlmt7902-net80211-0.3.0.zip`.
+This candidate defaults to stage 3 and uses the existing HeliPort-MT7902 2.1.5.
+Reset pauses the stack under its gate, then quiesces DMA on the worker before
+releasing old references and epochs. New joins recover firmware before reuse.
+The stack gate never waits for firmware; callbacks copy into bounded queues.
+No upstream systq thread is started: this STA build uses gated timers and has no
+systq task producers. Hardware validation, RF correctness and exact Tahoe kernel
+KPI export/load validation remain outstanding.

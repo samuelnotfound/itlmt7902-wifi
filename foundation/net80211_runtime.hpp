@@ -24,6 +24,9 @@ public:
     IOReturn getHardwareAddress(IOEthernetAddress *) override;
     IOReturn enable(IONetworkInterface *) override;
     IOReturn disable(IONetworkInterface *) override;
+    IOReturn setMulticastMode(bool) override;
+    IOReturn setMulticastList(IOEthernetAddress *,UInt32) override;
+    IOReturn getPacketFilters(const OSSymbol *,UInt32 *) const override;
     UInt32 outputPacket(mbuf_t,void *) override;
     void receiveDMA(const uint8_t *,uint32_t); // hardware worker only, including MCU waits
     void serve(); // hardware worker: consumes the existing HeliPort mailbox

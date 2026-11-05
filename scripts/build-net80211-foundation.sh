@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Compile/link net80211, its MT7902 bridge and the real hardware backend.
-# This target never emits an installable kext or enables a radio runtime path.
+# Emit the exclusive net80211 runtime candidate; keep the standalone target separate.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source_root=external/itlwm
@@ -95,7 +95,18 @@ done
 for name in kmod_info fw_blob; do
     source="src/$name.c"
     object="$output/obj/src__$name.o"
-    xcrun clang "${driver_flags[@]}" -c "$source" -o "$object"
+    input="$source"
+    if [[ "$name" == kmod_info ]]; then
+        python3 - "$source" "$output/runtime-kmod-info.c" <<'PY'
+from pathlib import Path
+import sys
+source=Path(sys.argv[1]).read_text()
+assert source.count('"0.2.16"')==1
+Path(sys.argv[2]).write_text(source.replace('"0.2.16"','"0.3.0"'))
+PY
+        input="$output/runtime-kmod-info.c"
+    fi
+    xcrun clang "${driver_flags[@]}" -c "$input" -o "$object"
     objects+=("$object")
     printf '%s\n' "$source" >> "$output/compiled-sources.txt"
 done
@@ -116,3 +127,26 @@ if [[ -n "${NET80211_KERNEL_EXPORT_CATALOG:-}" ]]; then
     audit_command+=(--kernel-export-catalog "$NET80211_KERNEL_EXPORT_CATALOG")
 fi
 "${audit_command[@]}"
+
+# Link the actual kernel bundle only after the runtime dependency audit passes.
+kext="$output/itlmt7902.kext"
+mkdir -p "$kext/Contents/MacOS"
+python3 - "$kext/Contents/Info.plist" <<'PY'
+import plistlib,sys
+from pathlib import Path
+info=plistlib.loads(Path('src/Info.plist').read_bytes())
+info['CFBundleVersion']=info['CFBundleShortVersionString']='0.3.0'
+info['OSBundleCompatibleVersion']='0.3.0'
+info['IOKitPersonalities']['itlmt7902']['CFBundleIdentifier']=info['CFBundleIdentifier']
+Path(sys.argv[1]).write_bytes(plistlib.dumps(info))
+PY
+link_min="$(otool -l "$apple_sdk/usr/lib/libkmodc++.a" | awk '/minos/ && !v {v=$2} END {print v}')"
+link_min="${link_min:-12.0}"
+xcrun clang++ -arch x86_64 "-mmacosx-version-min=$link_min" -nostdlib \
+    -Xlinker -kext -Xlinker -no_data_const \
+    "-L$kernel_sdk/Library/x86_64" "-L$apple_sdk/usr/lib" \
+    -lkmodc++ -lkmod -lcc_kext "${objects[@]}" -o "$kext/Contents/MacOS/itlmt7902"
+xcrun strip -S "$kext/Contents/MacOS/itlmt7902"
+plutil -lint "$kext/Contents/Info.plist"
+xcrun lipo "$kext/Contents/MacOS/itlmt7902" -verify_arch x86_64
+python3 -B scripts/package-net80211.py

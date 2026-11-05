@@ -92,7 +92,8 @@ int Mt7902Net80211Hardware::prepare(const Mt7902Net80211State &s)
         !(driver_.nicCaps.bands&(s.channel>14?2:1))) return EOPNOTSUPP;
     // Existing Connac2 RLM programming uses short slot. Do not silently claim
     // long-slot/HT support until the backend can program that negotiated state.
-    if (s.channel<=14 && (!(s.capability&0x400) || !s.short_slot)) return EOPNOTSUPP;
+    // AUTH precedes negotiation of the stack's slot flag; use the AP capability.
+    if (s.channel<=14 && !(s.capability&0x400)) return EOPNOTSUPP;
     uint8_t ies[2+IEEE80211_RATE_MAXSIZE]={1,s.rates.rs_nrates};
     for (unsigned i=0;i<s.rates.rs_nrates;i++) {
         if (!legacyRate(s.rates.rs_rates[i])) return EOPNOTSUPP;
@@ -186,6 +187,7 @@ int Mt7902Net80211Hardware::changeState(uint32_t epoch,const Mt7902Net80211State
         state_=IEEE80211_S_ASSOC; return 0;
     }
     if (s.state==IEEE80211_S_RUN) {
+        if(channel_<=14 && !s.short_slot)return EOPNOTSUPP;
         const uint16_t aid=s.association_id&0x3fff;
         if (state_!=IEEE80211_S_ASSOC || !aid || aid>2007 ||
             ((s.association_id&0xc000)!=0 && (s.association_id&0xc000)!=0xc000)) return EINVAL;

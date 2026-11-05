@@ -38,6 +38,9 @@ third-party license files with redistributed source and binaries.
 The external/itlwm submodule pins official OpenIntelWireless/itlwm commit
 53c51c2cdd6e4b69beb91f310d74c53422b0f8bd. Its macOS port is GPL-2.0-or-later
 with retained OpenBSD/NetBSD/other file notices. The foundation build compiles
-that source separately; it is not included in the current standalone kext.
+that source into the 0.3.0 net80211 runtime kext. The older standalone build
+remains separate and does not compile the new stack.
 See external/itlwm/LICENSE and the original notices in each source file.
-Future linked derivative builds must retain those source/license obligations.
+The linked runtime derivative retains those source/license obligations and
+includes the exact driver/upstream source archives and staged modifications in
+its package. Intel hardware backends are excluded from the binary.

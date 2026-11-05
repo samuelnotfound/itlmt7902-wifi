@@ -42,11 +42,19 @@ jobs:
           repository: acidanthera/MacKernelSDK
           ref: 3f750085caa17ec3a7880f11c11bf4f48cd6a164
           path: build/MacKernelSDK
-      - name: Compile upstream MAC foundation
+      - name: Build net80211 runtime kernel bundle
         run: |
           mkdir -p build/net80211-foundation
           python3 -B foundation/test_stage_net80211_pae.py
           bash scripts/build-net80211-foundation.sh > build/net80211-foundation/compile.log 2>&1 || { tail -100 build/net80211-foundation/compile.log; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MT7902-net80211-runtime-candidate
+          path: |
+            build/net80211-foundation/dist/*.zip
+            build/net80211-foundation/dist/SHA256SUMS.txt
+            build/net80211-foundation/dist/build-manifest.json
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
