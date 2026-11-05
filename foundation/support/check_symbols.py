@@ -78,6 +78,12 @@ def main():
     exports = symbol_set(args.kernel_export_catalog.read_text()) if args.kernel_export_catalog else None
     audit = classify(undefined, hooks, exports)
     sources = args.source_list.read_text().splitlines()
+    staged = output / "staged/ieee80211_pae_input.c"
+    shim = json.loads((output / "staged/pae-shim-manifest.json").read_text())
+    if (str(staged.as_posix()) not in sources or shim.get("hook_calls") != 1 or
+        shim.get("upstream_worktree_modified") is not False or
+        hashlib.sha256(staged.read_bytes()).hexdigest() != shim.get("staged_pae_sha256")):
+        raise ValueError("Deferred SECURE intent shim was not compiled as audited")
     archive = output / "libitlwm-net80211.a"
     linked = output / "net80211-relocatable.o"
     required = ["ieee80211_newstate", "ieee80211_input", "ieee80211_encap",
@@ -122,6 +128,7 @@ def main():
         "mt7902_runtime_integrated": False,
         "installable_kext": False,
         "validation_scope": "stack, bridge and real MT7902 executor/driver compiled with relocatable link; no runtime binding or RF validation",
+        "async_secure_intent_shim": shim,
         "verified_entry_points": sorted(set(required) - set(missing_entries)),
         "missing_entry_points": missing_entries,
         "missing_source_units": missing_sources,

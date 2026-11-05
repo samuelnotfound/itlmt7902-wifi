@@ -4,11 +4,36 @@ Source: [OpenIntelWireless/itlwm](https://github.com/OpenIntelWireless/itlwm)
 Pin: `53c51c2cdd6e4b69beb91f310d74c53422b0f8bd` (official master inspected for this port).
 Unmodified source and its GPL/BSD notices are in `external/itlwm`.
 
-This branch starts a stack migration. Its build compiles upstream net80211 state,
-input/output, node selection, security and EAPOL units against the Intel macOS
-kernel SDK. It checks the archive's MAC entry points. The archive is not yet wired
-into the active radio driver; this target produces no installable new-stack kext.
-The current 0.2.16 package still uses the existing connection engine.
+This branch now contains a concrete gated net80211 bridge, MT7902 firmware
+executor, strict RX/CCMP normalizer, hardware key encoder and session-completion
+guards. The build compiles them with the actual upstream stack, compatibility,
+timers, crypto and MT7902 backend; a relocatable link rejects unresolved stack
+and backend methods. Residual kernel imports are recorded, not assumed verified.
+
+The runtime coordinator still needs to bind the Ethernet instance, hardware
+worker, bounded mailboxes and completions, and replace the old m3 supervisor.
+These new components are not activated by the current 0.2.16 driver. This target
+produces build evidence rather than an installable kext.
+
+Implemented contracts:
+
+- Stack calls, timers and Ethernet link notifications use one checked gate;
+  firmware commands execute only on the captured hardware worker.
+- Hardware state/key snapshots contain copied values, never net80211 pointers.
+  Epochs and ticket checks reject old completions. Quiescence is explicit.
+- RX reconstructs the CCMP IV from real chip PN/key-ID metadata; net80211 retains
+  replay verification. Split A-MSDU, missing metadata and unsupported ciphers fail
+  closed. No HT/QoS/aggregation capabilities are advertised in this first bridge.
+- Only MIC/RSN-validated SECURE intent plus completed hardware association/keys
+  can authorize a protected port. A staged, pinned PAE notification preserves
+  asynchronous-key intent without editing the upstream submodule.
+- A mandatory Ethernet controller wrapper prevents the upstream stack from
+  publishing a transient link-up before the guarded controlled port is ready.
+- Key removal is WCID-wide. The executor compares key identity so deleting an
+  old GTK cannot clear a newer GTK installed on the shared broadcast WCID.
+
+No older Apple networking family is injected. The Ethernet path uses the target
+macOS IONetworkingFamily; OpenBSD net80211 is compiled source within the driver.
 
 | Layer | Owner |
 | --- | --- |

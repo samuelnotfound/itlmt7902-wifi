@@ -103,7 +103,7 @@ xcrun lipo "$output/libitlwm-net80211.a" -verify_arch x86_64
 # A static archive alone accepts arbitrary missing dependencies. A relocatable
 # link resolves references between every supplied object before symbol auditing.
 apple_sdk="$(xcrun --show-sdk-path)"
-xcrun ld -r -arch x86_64 -o "$output/net80211-relocatable.o" "${objects[@]}" \
+xcrun clang++ -arch x86_64 -nostdlib -Wl,-r -o "$output/net80211-relocatable.o" "${objects[@]}" \
     "-L$kernel_sdk/Library/x86_64" "-L$apple_sdk/usr/lib" -lkmodc++ -lkmod -lcc_kext
 xcrun nm -gjU "$output/net80211-relocatable.o" > "$output/defined-symbols.txt"
 xcrun nm -ju "$output/net80211-relocatable.o" > "$output/undefined-symbols.txt"
