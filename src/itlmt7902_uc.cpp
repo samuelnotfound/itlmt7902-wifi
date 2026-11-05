@@ -570,7 +570,7 @@ void itlmt7902::m3SaveAttempt(int result)
         "wifi-last-mgmt-tx","wifi-completion-diag","wifi-rx-packet-types",
         "wifi-txs-raw","wifi-txfree-raw","wifi-hw-tx","wifi-tx-memory",
         "device-info-ready","device-info-result","channel-switch-result","wifi-channel-setup","wifi-rate-profile",
-        "wifi-bss-setup","wifi-peer-setup","wifi-roc-grant"};
+        "wifi-bss-setup","wifi-peer-setup","wifi-roc-grant","wifi-edca-setup","wifi-auth-profile"};
     for (const char *key:keys) {
         OSObject *value=getProperty(key);
         if (value) entry->setObject(key,value);

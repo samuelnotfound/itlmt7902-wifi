@@ -9,15 +9,16 @@ The driver exposes an Ethernet interface managed through HeliPort's menu-bar UI.
 
 ## Baseline and validation
 
-Driver **0.2.14** builds on the MT7902 0.2.11 snapshot, commit `fc396ba`, which
+Driver **0.2.15** builds on the MT7902 0.2.11 snapshot, commit `fc396ba`, which
 provided Internet through Redmi A3 and iPhone 12 mini hotspots. Router joins on
 that baseline timed out. This version corrects empty basic-rate configuration,
 matches association rates to the AP, and adds constrained HT20 negotiation for
 OFDM-only peers. A supplied 0.2.13 capture confirms hotspot authentication, WPA2,
 DHCP and traffic; both Ramos router bands still time out during authentication.
-Version 0.2.14 defers peer QoS until association confirms WMM support and records
-the actual firmware channel grant. Its router behavior needs hardware validation.
-See [the release notes](docs/RELEASE-0.2.14.md) and
+Version 0.2.15 completes pre-association EDCA/QoS setup and adds a bounded
+CONNECT-on-add retry after an authentication timeout. Both trial profiles are
+recorded in one boot. Its router behavior needs hardware validation.
+See [the release notes](docs/RELEASE-0.2.15.md) and
 [the comparative driver audit](docs/COMPARATIVE-AUTH-AUDIT.md).
 
 Driver ancestry and firmware: hbyonly1's MT7922 port, thanhnndev and contributors'
@@ -50,16 +51,17 @@ Do not place
 passwords in Info.plist. Firmware is embedded; no separate firmware directory is
 required on macOS. Keep the old EFI as a recovery option.
 
-The combined **itlmt7902-HeliPort-0.2.14.zip** has the driver, app, notices and log
+The combined **itlmt7902-HeliPort-0.2.15.zip** has the driver, app, notices and log
 collector. The app-only ZIP is preferable when you already have the working driver.
 For a driver update with HeliPort already installed, use the separate
-**itlmt7902.kext-0.2.14.zip**; it includes the kext, release notes and licenses.
+**itlmt7902.kext-0.2.15.zip**; it includes the kext, release notes and licenses.
 
-HeliPort **2.1.3** restores the original modern/legacy HeliPort menu, including on
+HeliPort **2.1.4** restores the original modern/legacy HeliPort menu, including on
 Tahoe. It bounds menu polling and joins to prevent overlapping work from repeated
 clicks, keeps password windows alive until closed, and hardens menu/string access.
 Actions uses the macOS 15 Intel runner with Xcode 16.4.
-It also includes the animation and interface-info changes from 2.0.3.
+It also fixes saved-network security metadata and auto-join selecting stale
+"None" entries; credentials remain in Keychain. See the app's 2.1.4 release notes.
 Keep an installed 0.2.13 driver when trying this app update; no reboot is needed.
 The log collector includes app logs and up to three existing HeliPort crash reports.
 

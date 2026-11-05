@@ -42,7 +42,13 @@ completion timing are not yet fully observed. The exact cause is unconfirmed.
 Do not claim that OFDM, the router configuration or a prior hotspot connection
 is established as the cause. Candidate **0.2.14** now implements the QoS lifecycle
 correction and channel-grant diagnostics; see [its notes](RELEASE-0.2.14.md).
-Hardware validation of this candidate is pending.
+The user reports that candidate still fails. Candidate **0.2.15** completes
+EDCA QoS sequencing and adds one CONNECT-on-add retry after a response timeout.
+Both profiles are captured separately without another reboot. Its companion
+HeliPort **2.1.4** fixes saved-network security NONE metadata and uses current
+joinable scan entries for auto-join. Keep the original UI. See RELEASE-0.2.15.md.
+OPENCORE reads failed during this work; the newer failure capture was unavailable.
+Hardware confirmation remains required.
 
 ### Historical baseline and build details
 
@@ -124,7 +130,7 @@ Kernel scan/join command mailbox and status: `src/itlmt7902_uc.cpp`.
 ## Next hardware test
 
 1. Verify stage 3 and loaded driver version before attempting a connection.
-2. Use app 2.0.2 to rescan and try a previously working hotspot. Capture driver
+2. Use the bundled HeliPort 2.1.4 to rescan and try a previously working hotspot. Capture driver
    state if the hotspot is absent or the join fails.
 3. Then try the failing router once and collect the same-boot logs using
    `scripts/collect-logs.sh`. Inspect `wifi-attempt-history`, `wifi-error`,

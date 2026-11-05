@@ -199,6 +199,63 @@ size_t mt7902_encode_device_info(uint8_t *out,size_t capacity,const uint8_t mac[
     memcpy(out+10,mac,6);
     return 16;
 }
+size_t mt7902_encode_sta_basic(uint8_t *out,size_t capacity,const uint8_t peer[6],
+                               uint8_t connection_state,bool newly,bool qos,uint16_t aid)
+{
+    if (!out || !peer || capacity<20 || connection_state>2) return 0;
+    memset(out,0,20);
+    out[2]=20; out[4]=2; out[6]=1; // tag0, len20, CONNECTION_INFRA_AP=0x10002.
+    out[8]=connection_state; out[9]=qos?1:0;
+    out[10]=(uint8_t)aid; out[11]=(uint8_t)(aid>>8);
+    memcpy(out+12,peer,6);
+    out[18]=newly && connection_state?3:1; // EXTRA_INFO_VER | optional NEW.
+    return 20;
+}
+size_t mt7902_encode_edca(uint8_t *out,size_t capacity,uint8_t bss,bool qos,
+                          const uint8_t *ies,size_t length)
+{
+    if (!out || capacity<44 || (!ies && length)) return 0;
+    uint16_t aifs[4]={2,2,3,7},cwMin[4]={3,7,15,15},cwMax[4]={7,15,1023,1023},txop[4]={47,94,0,0};
+    // Linux mac80211 non-QoS defaults: equal queues, CWmin15/CWmax1023,
+    // AIFSN2 and TXOP0. Do not apply an AP's WMM parameters before negotiation.
+    if (!qos) for (unsigned ac=0;ac<4;ac++) {
+        aifs[ac]=2; cwMin[ac]=15; cwMax[ac]=1023; txop[ac]=0;
+    }
+    if (qos) {
+        bool found=false;
+        static const uint8_t aciToAc[4]={2,3,1,0};
+        for (size_t pos=0;pos<length;) {
+            if (length-pos<2 || ies[pos+1]>length-pos-2) return 0;
+            const uint8_t *e=ies+pos;
+            if (e[0]==221 && e[1]==24 && e[2]==0 && e[3]==0x50 && e[4]==0xf2 &&
+                e[5]==2 && e[6]==1 && e[7]==1) {
+                unsigned seen=0;
+                for (unsigned i=0;i<4;i++) {
+                    const uint8_t *r=e+10+4*i;
+                    const uint8_t aci=(r[0]>>5)&3,ac=aciToAc[aci];
+                    if ((seen&(1u<<aci)) || !(r[0]&15) || (r[1]&15)>(r[1]>>4)) return 0;
+                    seen|=1u<<aci;
+                    aifs[ac]=r[0]&15; cwMin[ac]=(uint16_t)((1u<<(r[1]&15))-1);
+                    cwMax[ac]=(uint16_t)((1u<<(r[1]>>4))-1); txop[ac]=le16(r+2);
+                }
+                found=true; break;
+            }
+            pos+=2+e[1];
+        }
+        if (!found) return 0;
+    }
+    uint8_t request[44]={};
+    static const uint8_t toAci[4]={1,0,2,3};
+    for (unsigned ac=0;ac<4;ac++) {
+        uint8_t *e=request+toAci[ac]*10;
+        const uint16_t values[]={cwMin[ac]?cwMin[ac]:(uint16_t)5,
+            cwMax[ac]?cwMax[ac]:(uint16_t)10,txop[ac],aifs[ac]};
+        for (unsigned i=0;i<4;i++) { e[2*i]=(uint8_t)values[i]; e[2*i+1]=(uint8_t)(values[i]>>8); }
+    }
+    request[40]=bss; request[41]=qos?1:0;
+    memcpy(out,request,sizeof(request));
+    return sizeof(request);
+}
 size_t mt7902_encode_sta_remove(uint8_t *out, size_t capacity, uint8_t bss,
                                 uint8_t wcid, const uint8_t peer[6])
 {

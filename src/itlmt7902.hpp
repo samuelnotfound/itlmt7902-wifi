@@ -186,6 +186,9 @@ private:
     int  m3Edca();                           // per-AC contention parameters from the AP's WMM element (after every BSS_INFO)
     int  m3Sta(uint8_t state, bool newly, uint16_t aid);
     int  m3Roc(bool acquire);
+    int  m3AcquireRoc();
+    bool authConnect = false;               // bounded CONNECT-state retry after baseline auth timeout
+    uint8_t peerWmm[26] = {};               // accepted association-response WMM Parameter element
     void m3Pump(uint32_t ms);
     void m3Event(const uint8_t *ev, uint32_t len);
     void m3ParseAp();

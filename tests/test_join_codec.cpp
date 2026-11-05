@@ -5,6 +5,61 @@
 #include <cstring>
 #include <cstdio>
 #include <initializer_list>
+static void test_peer_commands()
+{
+    const uint8_t peer[]={2,0x11,0x22,0x33,0x44,0x55};
+    // Independent STA BASIC wire fixtures. NEW is absent on subsequent updates;
+    // CONNECT and PORT_SECURE are not the separate NONE/AUTH/ASSOC state TLV.
+    const uint8_t connecting[]={0,0,20,0,2,0,1,0,1,0,0,0,2,0x11,0x22,0x33,0x44,0x55,3,0};
+    const uint8_t associated[]={0,0,20,0,2,0,1,0,2,1,5,0,2,0x11,0x22,0x33,0x44,0x55,1,0};
+    uint8_t actual[46]; memset(actual,0xa5,sizeof(actual));
+    assert(mt7902_encode_sta_basic(actual+1,20,peer,1,true,false,0)==20);
+    assert(!memcmp(actual+1,connecting,20) && actual[0]==0xa5 && actual[21]==0xa5);
+    assert(mt7902_encode_sta_basic(actual+1,20,peer,2,false,true,5)==20);
+    assert(!memcmp(actual+1,associated,20));
+    for (size_t n=0;n<20;n++) {
+        memset(actual,0xa5,sizeof(actual));
+        assert(!mt7902_encode_sta_basic(actual+1,n,peer,1,true,false,0));
+        for (uint8_t byte:actual) assert(byte==0xa5);
+    }
+    assert(!mt7902_encode_sta_basic(nullptr,20,peer,1,true,false,0));
+    assert(!mt7902_encode_sta_basic(actual,20,nullptr,1,true,false,0));
+    assert(!mt7902_encode_sta_basic(actual,20,peer,3,true,false,0));
+    // Default non-QoS DCF, even when a beacon advertises WMM. A hostile beacon
+    // cannot affect pre-association contention or set the firmware's QoS byte.
+    const uint8_t wmm[]={221,24,0,0x50,0xf2,2,1,1,0x80,0,
+        3,0xa4,0,0,0x27,0xa4,0,0,0x42,0x43,0x5e,0,0x62,0x32,0x2f,0};
+    const uint8_t dcf[44]={15,0,255,3,0,0,2,0,0,0,
+        15,0,255,3,0,0,2,0,0,0,15,0,255,3,0,0,2,0,0,0,
+        15,0,255,3,0,0,2,0,0,0,0,0,0,0};
+    memset(actual,0xa5,sizeof(actual));
+    assert(mt7902_encode_edca(actual+1,44,0,false,wmm,sizeof(wmm))==44);
+    assert(!memcmp(actual+1,dcf,44) && actual[0]==0xa5 && actual[45]==0xa5);
+    // WMM AC_BE/AC_BK/AC_VI/AC_VO -> firmware BK/BE/VI/VO record ordering.
+    const uint8_t negotiated[44]={15,0,255,3,0,0,7,0,0,0,
+        15,0,255,3,0,0,3,0,0,0,7,0,15,0,94,0,2,0,0,0,
+        3,0,7,0,47,0,2,0,0,0,0,1,0,0};
+    assert(mt7902_encode_edca(actual+1,44,0,true,wmm,sizeof(wmm))==44);
+    assert(!memcmp(actual+1,negotiated,44));
+    for (size_t n=0;n<44;n++) {
+        memset(actual,0xa5,sizeof(actual));
+        assert(!mt7902_encode_edca(actual+1,n,0,true,wmm,sizeof(wmm)));
+        for (uint8_t byte:actual) assert(byte==0xa5);
+    }
+    for (size_t n=0;n<sizeof(wmm);n++) {
+        memset(actual,0xa5,sizeof(actual));
+        assert(!mt7902_encode_edca(actual+1,44,0,true,wmm,n));
+        for (uint8_t byte:actual) assert(byte==0xa5);
+    }
+    uint8_t bad[sizeof(wmm)]; memcpy(bad,wmm,sizeof(bad));
+    bad[14]=3; // duplicate ACI0 instead of ACI1
+    assert(!mt7902_encode_edca(actual,44,0,true,bad,sizeof(bad)));
+    memcpy(bad,wmm,sizeof(bad)); bad[11]=0x34; // CWmin exponent exceeds max
+    assert(!mt7902_encode_edca(actual,44,0,true,bad,sizeof(bad)));
+    assert(!mt7902_encode_edca(nullptr,44,0,false,nullptr,0));
+    assert(!mt7902_encode_edca(actual,44,0,false,nullptr,1));
+    assert(mt7902_encode_edca(actual,44,0,false,nullptr,0)==44);
+}
 static void test_legacy_rates()
 {
     // Observed failure profile: all OFDM rates, no CCK and no basic markers.
@@ -159,6 +214,7 @@ static void test_roc_grant()
 }
 int main()
 {
+    test_peer_commands();
     test_legacy_rates();
     test_assoc_negotiation();
     test_roc_grant();

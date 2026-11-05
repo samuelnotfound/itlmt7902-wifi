@@ -48,3 +48,9 @@ bool mt7902_decode_register_reply(const uint8_t *event, size_t length,
 // Connac2 disconnect: BASIC(disconnected) + empty RESET_AND_SET WTBL.
 size_t mt7902_encode_sta_remove(uint8_t *out, size_t capacity, uint8_t bss,
                                 uint8_t wcid, const uint8_t peer[6]);
+// STA_REC_BASIC: connection state is distinct from STA_REC_STATE (NONE/AUTH/ASSOC).
+size_t mt7902_encode_sta_basic(uint8_t *out, size_t capacity, const uint8_t peer[6],
+                               uint8_t connection_state, bool newly, bool qos, uint16_t aid);
+// CE SET_EDCA_PARMS. Before WMM negotiation use non-QoS defaults, not beacon EDCA.
+size_t mt7902_encode_edca(uint8_t *out, size_t capacity, uint8_t bss, bool qos,
+                          const uint8_t *ies, size_t length);
