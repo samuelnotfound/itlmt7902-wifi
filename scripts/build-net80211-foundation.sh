@@ -13,9 +13,11 @@ output=build/net80211-foundation
 mkdir -p "$output/obj"
 flags=(-arch x86_64 -mmacosx-version-min=12.0 -O2 -g
        -mkernel -fapple-kext -fno-builtin -fno-stack-protector -nostdlib -nostdlibinc
-       -ffreestanding -fno-exceptions -fno-rtti -std=gnu++14
+       -ffreestanding -fno-exceptions -fno-rtti -std=gnu++17
        -DKERNEL -DKERNEL_PRIVATE -DDRIVER_PRIVATE -DAPPLE -DNeXT
+       -DIEEE80211_STA_ONLY
        -I"$source_root/itl80211/openbsd" -I"$source_root/itl80211" -I"$source_root/include"
+       -iquote "$source_root/itl80211/linux"
        -I"$kernel_sdk/Headers" -include "$source_root/itlwm/PrivateSPI.pch"
        "-ffile-prefix-map=$PWD=." "-fdebug-prefix-map=$PWD=.")
 objects=()
