@@ -230,10 +230,12 @@ void Mt7902Net80211Runtime::managementDiagnostic(const uint8_t *frame,size_t len
     const unsigned word2=length>=30?frame[28]|unsigned(frame[29])<<8:0;
     driver_->evLog("net80211 %s fc=%02x len=%u fixed=%04x/%04x/%04x normalize=%d",
         direction,frame[0],(unsigned)length,word0,word1,word2,error);
-    if(subtype==0 && length>=28)
-        driver_->setProperty("net80211-assoc-request",frame,(unsigned)length);
-    if(subtype==1 && length>=30)
-        driver_->setProperty("net80211-assoc-response",frame,(unsigned)length);
+    const char *property=subtype==0 && length>=28?"net80211-assoc-request":
+        subtype==1 && length>=30?"net80211-assoc-response":nullptr;
+    if(property) {
+        auto data=OSData::withBytes(frame,(unsigned)length);
+        if(data){driver_->setProperty(property,data);data->release();}
+    }
 }
 int Mt7902Net80211Runtime::reset(bool recover)
 {
