@@ -185,6 +185,14 @@ int Mt7902Net80211::disconnect()
     join_requested_=false;
     return queueState(IEEE80211_S_INIT,-1);
 }
+void Mt7902Net80211::pause()
+{
+    if (!inGate() || !attached_) return;
+    stopping_=true; session_.cancel(); secure_intent_=false;
+    ic_.ic_if.if_flags&=~IFF_RUNNING;
+    if(ic_.ic_bss)ic_.ic_bss->ni_port_valid=0;
+    ieee80211_set_link_state(&ic_,LINK_STATE_DOWN);
+}
 
 int Mt7902Net80211::queueState(ieee80211_state state,int argument)
 {
@@ -480,6 +488,7 @@ int Mt7902Net80211::acknowledgeQuiesced(bool quiesced)
     stopping_=oldStopping;
     ic_.ic_if.if_flags&=~(IFF_RUNNING | IFF_UP);
     bzero(ic_.ic_psk,sizeof(ic_.ic_psk));
+    stopping_=false;
     return session_.quiesced()?0:EBUSY;
 }
 int Mt7902Net80211::shutdown(bool quiesced)
@@ -487,6 +496,7 @@ int Mt7902Net80211::shutdown(bool quiesced)
     if (!inGate() || !attached_ || !quiesced) return EINVAL;
     stopping_=true;
     acknowledgeQuiesced(true);
+    stopping_=true;
     ieee80211_ifdetach(&ic_.ic_if);
     if_detach(&ic_.ic_if);
     if (network_controller_) network_controller_->unbind(this);

@@ -69,6 +69,8 @@ public:
     int beginScan();
     int finishScan();
     int disconnect();
+    void pause(); // Gate-only: stop callbacks before the worker quiesces DMA.
+    uint32_t generation() const { return session_.generation(); }
     // Raw frame has no FCS/RXD. HWDEC requires the actual reconstructed CCMP IV.
     // Caller retains input storage; this method copies it into a stack-owned mbuf.
     int receive(const uint8_t *,size_t,uint8_t channel,int rssi_dbm,bool rssi_valid,

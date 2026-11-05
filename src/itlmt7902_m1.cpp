@@ -462,7 +462,12 @@ void itlmt7902::m1Main()
                 setProperty("join-supported",kOSBooleanTrue);
                 __atomic_store_n(&scanControlReady,true,__ATOMIC_RELEASE);
                 __atomic_store_n(&joinControlReady,true,__ATOMIC_RELEASE);
+#ifdef ITL_NET80211_RUNTIME
+                m3fast=false;
+                net80211Serve();
+#else
                 m3Supervise();
+#endif
             } else m2ServeScans();
         }
     }

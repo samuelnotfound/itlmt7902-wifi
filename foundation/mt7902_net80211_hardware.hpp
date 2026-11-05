@@ -12,6 +12,7 @@ class Mt7902Net80211Hardware {
 public:
     explicit Mt7902Net80211Hardware(itlmt7902 &);
     int bindSession(uint32_t epoch);
+    bool bound() const { return epoch_!=0; }
     int changeState(uint32_t epoch,const Mt7902Net80211State &);
     int updateKey(uint32_t epoch,const Mt7902Net80211Key &);
     int transmit(uint32_t epoch,const uint8_t *,size_t,const Mt7902Net80211Tx &);

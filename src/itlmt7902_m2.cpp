@@ -140,6 +140,9 @@ void itlmt7902::rxFrameDump(const uint8_t *p,uint32_t length)
 }
 void itlmt7902::rxParseFrame(const uint8_t *p,uint32_t length)
 {
+#ifdef ITL_NET80211_RUNTIME
+    net80211Receive(p,length);
+#endif
     if (m3wantFc && m3RxMgmt(p,length)) return;
     if (m3dataOn && m3RxCtl(p,length)) return;
     if (m3dataOn && m3RxData(p,length)) return;
@@ -162,7 +165,9 @@ void itlmt7902::rxParseFrame(const uint8_t *p,uint32_t length)
     const uint8_t channel=beacon.channel?beacon.channel:view.channel;
     rxBeacons++;
     if (channel<sizeof(chHist) && chHist[channel]!=255) chHist[channel]++;
+#ifndef ITL_NET80211_RUNTIME
     m3Capture(f,n,ssid,channel);
+#endif
     apSeen(p,view.packet_length,view.frame_offset,ssid,channel);
 }
 int itlmt7902::m2Scan(const char *ssid)
@@ -187,6 +192,9 @@ int itlmt7902::m2Scan(const char *ssid)
     uint32_t publish=start;
     while (!shouldStop() && !firmwareFault && !scanDone && (uint32_t)(nowMs()-start)<20000) {
         rxDataPoll();
+#ifdef ITL_NET80211_RUNTIME
+        net80211ServiceRx();
+#endif
         if ((uint32_t)(nowMs()-publish)>=1000) { m2Publish(); publish=nowMs(); }
         IOSleep(1);
     }

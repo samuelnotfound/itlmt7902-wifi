@@ -98,13 +98,17 @@ def main():
                         ("Mt7902Net80211Hardware", "updateKey"),
                         ("Mt7902Net80211Hardware", "transmit"),
                         ("Mt7902Net80211Hardware", "releaseAfterQuiesce")]
+    required_methods.extend([("Mt7902Net80211Runtime", "serve"),
+                             ("Mt7902Net80211Runtime", "receiveDMA"),
+                             ("itlmt7902", "net80211Serve")])
     for owner, method in required_methods:
         label = owner + "::" + method
         required.append(label)
         if not any(owner in symbol and method in symbol for symbol in defined):
             missing_entries.append(label)
     bridge_sources = {"foundation/net80211_bridge.cpp", "foundation/mt7902_net80211_session.cpp",
-                      "foundation/mt7902_net80211_rx.cpp", "foundation/mt7902_net80211_key.cpp"}
+                      "foundation/mt7902_net80211_rx.cpp", "foundation/mt7902_net80211_key.cpp",
+                      "foundation/net80211_runtime.cpp"}
     hardware_sources = {"foundation/mt7902_net80211_hardware.cpp", "src/itlmt7902.cpp",
                         "src/itlmt7902_m1.cpp", "src/itlmt7902_m2.cpp", "src/itlmt7902_m3.cpp",
                         "src/itlmt7902_txrx.cpp", "src/itlmt7902_uc.cpp", "src/itlmt7902_eth.cpp",
@@ -124,10 +128,11 @@ def main():
         "intel_hardware_backend_included": False,
         "mt7902_bridge_compiled_and_linked": closure_passed,
         "mt7902_hardware_executor_compiled_and_linked": closure_passed,
-        "runtime_binding_enabled": False,
-        "mt7902_runtime_integrated": False,
+        "runtime_entry_compiled": closure_passed,
+        "runtime_binding_enabled": closure_passed,
+        "mt7902_runtime_integrated": closure_passed,
         "installable_kext": False,
-        "validation_scope": "stack, bridge and real MT7902 executor/driver compiled with relocatable link; no runtime binding or RF validation",
+        "validation_scope": "runtime entry, stack and MT7902 backend compiled with relocatable link; no hardware or RF validation",
         "async_secure_intent_shim": shim,
         "verified_entry_points": sorted(set(required) - set(missing_entries)),
         "missing_entry_points": missing_entries,

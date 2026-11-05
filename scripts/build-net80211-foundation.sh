@@ -33,7 +33,7 @@ flags=(-arch x86_64 -mmacosx-version-min=12.0 -O2 -g
        -mkernel -fapple-kext -fno-builtin -fno-stack-protector -nostdlib -nostdlibinc
        -ffreestanding -fno-exceptions -fno-rtti -std=gnu++17 -Wno-register
        -DKERNEL -DKERNEL_PRIVATE -DDRIVER_PRIVATE -DAPPLE -DNeXT
-       -DIEEE80211_STA_ONLY
+       -DIEEE80211_STA_ONLY -DITL_NET80211_RUNTIME
        -I"$source_root/itl80211/openbsd" -I"$source_root/itl80211" -I"$source_root/include"
        -iquote "$source_root/itl80211/linux"
        -I"$kernel_sdk/Headers" -include "$source_root/itlwm/PrivateSPI.pch"
@@ -46,7 +46,7 @@ driver_flags=(-arch x86_64 -mmacosx-version-min=12.0 -O2 -g -fno-omit-frame-poin
        "-ffile-prefix-map=$PWD=." "-fdebug-prefix-map=$PWD=."
        "-ffile-prefix-map=$kernel_sdk=MacKernelSDK" "-fdebug-prefix-map=$kernel_sdk=MacKernelSDK"
        -mkernel -fno-builtin -fno-stack-protector -nostdlib -nostdlibinc
-       -ffreestanding -DKERNEL -DKERNEL_PRIVATE -DDRIVER_PRIVATE -DAPPLE -DNeXT
+       -ffreestanding -DKERNEL -DKERNEL_PRIVATE -DDRIVER_PRIVATE -DAPPLE -DNeXT -DITL_NET80211_RUNTIME
        "-I$kernel_sdk/Headers" -Isrc -Icodec -Ifoundation)
 objects=()
 : > "$output/compiled-sources.txt"
@@ -64,6 +64,7 @@ done
 # actual itlmt7902 member functions. Their references must resolve in the same
 # relocatable link, not against compile-only stubs.
 bridge_sources=(foundation/net80211_bridge.cpp
+                foundation/net80211_runtime.cpp
                 foundation/mt7902_net80211_hardware.cpp)
 for source in "${bridge_sources[@]}"; do
     [[ -f "$source" ]]

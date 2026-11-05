@@ -21,6 +21,7 @@
 class itlmt7902Eth;
 class IOUserClient;
 class Mt7902Net80211Hardware;
+class Mt7902Net80211Runtime;
 
 // Per-frame options for m3Tx (everything defaults to the verified legacy behaviour: fixed 6 Mb/s, management queue)
 struct M3TxOpt {
@@ -78,6 +79,11 @@ public:
 
 private:
     friend class Mt7902Net80211Hardware;
+    friend class Mt7902Net80211Runtime;
+    Mt7902Net80211Runtime *netRuntime=nullptr;
+    void net80211Serve();
+    void net80211Receive(const uint8_t *,uint32_t);
+    void net80211ServiceRx();
     bool busMasterOn = false;
     bool quiesceHardware();
     bool stopping = false, workerRunning = false, firmwareFault = false;
