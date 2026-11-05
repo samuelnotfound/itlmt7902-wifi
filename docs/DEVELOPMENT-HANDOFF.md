@@ -1,6 +1,6 @@
 # Continuing MT7902 development on macOS
 
-Updated 2026-11-04. This is a technical project handoff, not a chat export.
+Updated 2026-11-05. This is a technical project handoff, not a chat export.
 
 ## Goal and scope
 
@@ -25,19 +25,40 @@ the submodule pointer in the driver repository.
 
 ## Current validated source and builds
 
+Current checkpoint: driver **0.2.13** reaches stage 3 and provides hotspot
+authentication, WPA2, DHCP and traffic in the supplied capture. Both Ramos bands
+still time out during initial authentication without observed TXS/TXFREE. The
+user confirms the same failure when Ramos is the first connection after boot;
+do not request that test again. The initial basic-rate correction did not solve
+the router failure. HeliPort **2.1.3**, commit
+`b36d9154b4f81f55e3be4c666620d218dd53f38d`, retains the original UI and is reported
+stable by the user. Its successful build is
+https://github.com/samuelnotfound/HeliPort-MT7902/actions/runs/41912727161.
+
+See [the comparative authentication audit](COMPARATIVE-AUTH-AUDIT.md) for the
+broader Linux, vendor-driver and macOS comparison. Pre-authentication QoS is a
+separate variable from fixed-rate selection; actual ROC grants and per-token
+completion timing are not yet fully observed. The exact cause is unconfirmed.
+Do not claim that OFDM, the router configuration or a prior hotspot connection
+is established as the cause. Candidate **0.2.14** now implements the QoS lifecycle
+correction and channel-grant diagnostics; see [its notes](RELEASE-0.2.14.md).
+Hardware validation of this candidate is pending.
+
+### Historical baseline and build details
+
 The earlier baseline/build details below describe **0.2.11**. Development now
 targets **0.2.13** with basic-rate fallback, AP-matched association rates and
 constrained HT20 negotiation. See `RELEASE-0.2.13.md`. The supplied same-boot
 capture confirms stage 3 and hotspot traffic on 0.2.11; the OFDM-only router
 attempts show basic rates zero and authentication timeouts with no observed
-TXS/TXFREE. Hardware results for the changed 0.2.13 driver are still pending.
+TXS/TXFREE. The current 0.2.13 results are summarized above.
 
 - Baseline driver version: **0.2.11**. Its `src/` and `codec/` matched the earlier
   standalone snapshot `fc396baebec051f853ddee79de13f0b34138dd33`.
 - The driver baseline was reported to provide Internet through Android and iPhone
   hotspots. Router interoperability remains unresolved. Do not claim all networks
   work or that a UI change fixes the radio/association path.
-- Latest app version: **HeliPort-MT7902 2.0.2**, commit
+- Earlier app baseline: **HeliPort-MT7902 2.0.2**, commit
   `4ca3ef0fc55868c2b6d6647a4183a9d6257a408d`.
 - Driver repository commit pinning that app:
   `109181e4558fd38cea4639a2b3a04e3eba6da725`.
@@ -48,13 +69,17 @@ TXS/TXFREE. Hardware results for the changed 0.2.13 driver are still pending.
   https://github.com/samuelnotfound/itlmt7902-wifi/actions/runs/41826699029
 - App-only artifact: `HeliPort-MT7902`; combined artifact:
   `MT7902-Ethernet-HeliPort`. The Actions artifacts contain inner ZIPs.
-- Hardware validation of the HeliPort adapter is still pending.
+- These build records precede the current app stability report.
 
-## Current setup issue to resolve first
+## Historical stage-setting issue — resolved on the test machine
 
-The installed app reported that connections were not enabled. The user confirmed
+An earlier installed app reported that connections were not enabled. The user confirmed
 they had not set a stage boot argument. The current kext defaults to **stage 2,
 passive scanning only**. It requires **`mt7902_stage=3`** to enable joins.
+
+The latest supplied capture already has stage 3, joins enabled and hotspot
+traffic. Do not ask this user to add another boot argument to explain Ramos.
+The following instructions are retained for a fresh installation only.
 
 Append that argument to the existing OpenCore `boot-args` under
 `NVRAM -> Add -> 7C436110-AB2A-4BBB-A880-FE41995C9F82`, retaining other arguments.

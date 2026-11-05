@@ -284,6 +284,7 @@ private:
     // its rate control choose MCS for unicast data instead of the fixed 6 Mb/s. Only used when the AP is on 5 GHz and has HT.
     bool m3fast = false;                     // requested by the boot-arg
     bool fastActive = false;                 // requested and the target AP supports it
+    bool peerQos = false;                    // WMM accepted in the association response; never pre-auth QoS.
     itl_ap_caps apCaps = {};
     uint8_t fastBw = 0, fastCenter = 0, fastNss = 1;   // operating width (CMD_CBW_*), center channel, usable streams
     uint32_t fastRate = 54;                  // estimated best PHY rate, Mb/s

@@ -569,7 +569,8 @@ void itlmt7902::m3SaveAttempt(int result)
     const char *keys[]={"m3-res","m3-log","wifi-auth-diag","wifi-assoc-diag",
         "wifi-last-mgmt-tx","wifi-completion-diag","wifi-rx-packet-types",
         "wifi-txs-raw","wifi-txfree-raw","wifi-hw-tx","wifi-tx-memory",
-        "device-info-ready","device-info-result","channel-switch-result","wifi-channel-setup","wifi-rate-profile"};
+        "device-info-ready","device-info-result","channel-switch-result","wifi-channel-setup","wifi-rate-profile",
+        "wifi-bss-setup","wifi-peer-setup","wifi-roc-grant"};
     for (const char *key:keys) {
         OSObject *value=getProperty(key);
         if (value) entry->setObject(key,value);

@@ -161,6 +161,17 @@ void itlmt7902::m3Event(const uint8_t *ev, uint32_t len)
         if (tag != 0 || tl < 20 || len < 40u + tl || ev[44] != M3_BSS_IDX || ev[45] != rocTok) return;
         rocStatus = ev[46]; rocGrant = true;
         m3log("roc grant bss=%u tok=%u status=%u", ev[44], ev[45], ev[46]);
+        Mt7902RocGrant grant={}; char detail[256];
+        if (mt7902_decode_roc_grant(ev,len,M3_BSS_IDX,rocTok,&grant)) {
+            const bool matches=grant.channel==tgtCh && grant.band==(tgtCh>14?2:1) &&
+                grant.width==0 && grant.center==tgtCh && !grant.center2 && !grant.request_type;
+            snprintf(detail,sizeof(detail),"bss=%u token=%u status=%u channel=%u band=%u width=%u center=%u/%u request=%u interval_ms=%u requested_channel=%u matches=%u",
+                grant.bss,grant.token,grant.status,grant.channel,grant.band,grant.width,
+                grant.center,grant.center2,grant.request_type,grant.interval_ms,tgtCh,matches?1u:0u);
+        } else snprintf(detail,sizeof(detail),"bss=%u token=%u status=%u details=unavailable bytes=%u",
+            ev[44],ev[45],ev[46],len);
+        setProperty("wifi-roc-grant",detail);
+        m3log("%s",detail);
     }
 }
 
@@ -346,6 +357,10 @@ int itlmt7902::m3SetChannel()
     int rc=mcuSend(0x08ed,request,sizeof(request),true,nullptr);
     m3log("channel switch ch=%u response rc=%d",tgtCh,rc);
     setProperty("channel-switch-result",(uint32_t)rc,32);
+    char current[128];
+    snprintf(current,sizeof(current),"channel=%u band=%u width=20 timing=firmware response_rc=%d",
+        tgtCh,tgtCh>14?5u:2u,rc);
+    setProperty("wifi-channel-setup",current);
     if (rc) return rc;
     if (registerViewsCaptured) return 0;
     // 0.2.8's timing writes/readback requirement blocked every hardware join.
@@ -376,7 +391,7 @@ int itlmt7902::m3SetChannel()
     snprintf(detail,sizeof(detail),"channel=%u timing=firmware fixed=%08x/%08x/%08x/%08x l1=%08x/%08x/%08x/%08x fw_valid=%x fw=%08x/%08x/%08x/%08x",
         tgtCh,fixed[0],fixed[1],fixed[2],fixed[3],mapped[0],mapped[1],mapped[2],mapped[3],
         valid,firmware[0],firmware[1],firmware[2],firmware[3]);
-    setProperty("wifi-channel-setup",detail);
+    setProperty("wifi-channel-register-snapshot",detail);
     m3log("channel register views %s",detail);
     return shouldStop() || firmwareFault?ITL_EIO:0;
 }
@@ -410,8 +425,14 @@ int itlmt7902::m3Bss(bool enable)
     uint16_t phy=g2?3:8;
     if (fastActive) { b[25]|=g2?0x08:(0x10|(apCaps.vht?0x20:0)); phy|=0x10|(apCaps.vht?0x20:0); }
     put16(b+26,M3_BMC_WCID); put16(b+28,phy);
-    // Match the association WMM IE and STA BASIC/WTBL QoS flags.
-    uint8_t *q=m.tlv(15,8); q[4]=fastActive?1:0;
+    // mac80211 does not mark the peer WMM-capable until association succeeds.
+    // Requesting HT/WMM in the association frame is not negotiated QoS yet.
+    const bool qos=enable && peerQos;
+    uint8_t *q=m.tlv(15,8); q[4]=qos?1:0;
+    char detail[128];
+    snprintf(detail,sizeof(detail),"connected=%u qos=%u planned_ht=%u channel=%u",
+        enable?1u:0u,qos?1u:0u,fastActive?1u:0u,tgtCh);
+    setProperty("wifi-bss-setup",detail);
     m.b[2]=m.b[3]=0; // BSS header has reserved bytes, unlike STA's TLV count.
     int rc=m3Cmd(UNI_BSS_INFO_UPDATE,m.b,m.n,enable?"bss(enable)":"bss(add)");
     if (rc) return rc;
@@ -472,7 +493,8 @@ int itlmt7902::m3Edca()
 int itlmt7902::m3Sta(uint8_t state, bool newly, uint16_t aid)
 {
     M3Msg m; m.init(8); m.b[0]=M3_BSS_IDX; m.b[1]=M3_AP_WCID; m.b[4]=1;
-    uint8_t *b=m.tlv(0,20); put32(b+4,0x10002); b[8]=2; b[9]=fastActive?1:0;
+    const bool qos=state==2 && peerQos;
+    uint8_t *b=m.tlv(0,20); put32(b+4,0x10002); b[8]=2; b[9]=qos?1:0;
     put16(b+10,aid); memcpy(b+12,tgtBssid,6); put16(b+18,newly?3:1);
     bool ht=fastActive && state==2;
     if (ht) {
@@ -497,7 +519,7 @@ int itlmt7902::m3Sta(uint8_t state, bool newly, uint16_t aid)
     auto wt=[&](uint16_t tag,uint16_t len)->uint8_t* {
         uint8_t *t=m.b+m.n; put16(t,tag); put16(t+2,len); m.n+=len; nested++; return t;
     };
-    uint8_t *g=wt(0,20); memcpy(g+4,tgtBssid,6); g[10]=0; g[13]=fastActive?1:0; put16(g+16,aid);
+    uint8_t *g=wt(0,20); memcpy(g+4,tgtBssid,6); g[10]=0; g[13]=qos?1:0; put16(g+16,aid);
     uint8_t *rx=wt(1,12); rx[5]=rx[6]=rx[7]=1;
     uint8_t *tr=wt(6,8); tr[4]=1; tr[6]=1;
     if (ht) {
@@ -514,6 +536,12 @@ int itlmt7902::m3Sta(uint8_t state, bool newly, uint16_t aid)
         uint8_t *smps=wt(13,8); smps[4]=0;
     }
     put16(wh+2,nested); put16(outer+2,m.n-outerStart);
+    char detail[192];
+    snprintf(detail,sizeof(detail),"state=%u conn=2 qos=%u ht=%u newly=%u aid=%u basic=%04x legacy=%04x",
+        state,qos?1u:0u,ht?1u:0u,newly?1u:0u,aid,
+        g2?(uint16_t)(apBasicCck|(apBasic<<4)):apBasic,(uint16_t)(apSupp<<6)|(g2?apCck:0));
+    setProperty("wifi-peer-setup",detail);
+    m3log("peer %s",detail);
     char name[32]; snprintf(name,sizeof(name),"sta_connac2(st=%u)",state);
     return m3Cmd(UNI_STA_REC_UPDATE,m.b,m.n,name);
 }
@@ -537,6 +565,7 @@ int itlmt7902::m3Roc(bool acquire)
         rocGrant = false;
         rocStatus = 0xff;
         rocTok++;
+        setProperty("wifi-roc-grant","waiting");
         put16(t + 0, 0);                                     // UNI_ROC_ACQUIRE
         put16(t + 2, 24);
         t[4] = M3_BSS_IDX;
@@ -716,10 +745,19 @@ int itlmt7902::m3Assoc()
         memcpy(p, wmm, sizeof(wmm)); p += sizeof(wmm);
     }
     if (!m3Xchg(f, (uint32_t)(p - f), 0, 0x10)) return ITL_TIMEOUT;
-    uint16_t st = (uint16_t)(m3rx[26] | (m3rx[27] << 8)), aid = (uint16_t)((m3rx[28] | (m3rx[29] << 8)) & 0x3fff);
-    m3log("assoc resp status=%u aid=%u", st, aid);
-    if (st) return ITL_EIO;
-    m3aid = aid;
+    Mt7902AssocResponse response={};
+    if (!mt7902_decode_assoc_response(m3rx,m3rxLen,&response)) {
+        m3log("malformed association response bytes=%u",m3rxLen);
+        return ITL_EINVAL;
+    }
+    m3log("assoc resp status=%u aid=%u wmm=%u",response.status,response.aid,response.wmm?1u:0u);
+    if (response.status) return ITL_EIO;
+    if (fastActive && !response.wmm) {
+        m3log("HT association did not accept WMM; retry legacy profile");
+        return ITL_EIO; // Existing association fallback ladder tears down first.
+    }
+    peerQos=fastActive && response.wmm;
+    m3aid = response.aid;
     return 0;
 }
 
@@ -737,6 +775,10 @@ int itlmt7902::m3Run1()
     removeProperty("wifi-rx-packet-types");
     removeProperty("wifi-completion-diag");
     removeProperty("wifi-rate-profile");
+    removeProperty("wifi-bss-setup");
+    removeProperty("wifi-peer-setup");
+    removeProperty("wifi-roc-grant");
+    removeProperty("wifi-channel-setup");
     removeProperty("wifi-txs-raw");
     removeProperty("wifi-txfree-raw");
     removeProperty("wifi-hw-tx");
@@ -754,6 +796,7 @@ int itlmt7902::m3Run1()
     m3eapolHead = m3eapolTail = m3eapolDrops = 0;
     m3rxLen = 0;
     fastActive = false;
+    peerQos = false;
     txPool = true;
 
     // 0. credentials: the candidates m3Supervise() put in nets[] (a joined network, or itl_ssid / itl_psk .. itl_ssid4 / itl_psk4
@@ -928,6 +971,7 @@ void itlmt7902::m3Teardown()
 {
     m3linkUp = false;
     ethLink(false);
+    peerQos=false;
     m3wantEapol=false;
     bzero(m3pmk,sizeof(m3pmk)); bzero(m3ptk,sizeof(m3ptk)); bzero(m3psk,sizeof(m3psk));
     if (shouldStop() || firmwareFault) { m3dataOn=false; return; }
@@ -1037,6 +1081,7 @@ bool itlmt7902::chipRecover()
     m3cipher = 0;
     ethStalled = false;
     fastActive = false;
+    peerQos = false;
     txPool = true;
     // Token ownership is retained until TXFREE or a quiesced hardware reset.
     m3hw = false;                                            // a reloaded firmware has none of the one-time setup (fw_log, efuse, RTS): redo it

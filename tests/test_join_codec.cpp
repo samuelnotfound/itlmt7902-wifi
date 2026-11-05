@@ -70,9 +70,97 @@ static void test_legacy_rates()
         assert(roundtrip.basic_cck==r.basic_cck && roundtrip.basic_ofdm==r.basic_ofdm && !roundtrip.basic_fallback);
     }
 }
+static void test_assoc_negotiation()
+{
+    // Independent association response: fixed body, AID with reserved bits,
+    // Supported Rates, then an AP's WMM Parameter element.
+    uint8_t response[60]={0x10}; response[28]=5; response[29]=0xc0;
+    response[30]=1; response[31]=2; response[32]=0x8c; response[33]=0x98;
+    const uint8_t wmm[26]={221,24,0,0x50,0xf2,2,1,1,0x80,0,
+        3,0xa4,0,0,0x27,0xa4,0,0,0x42,0x43,0x5e,0,0x62,0x32,0x2f,0};
+    memcpy(response+34,wmm,sizeof(wmm));
+    Mt7902AssocResponse parsed={};
+    assert(mt7902_decode_assoc_response(response,sizeof(response),&parsed));
+    assert(!parsed.status && parsed.aid==5 && parsed.wmm);
+    // A legacy success has no WMM; HT requested by us must not invent it.
+    assert(mt7902_decode_assoc_response(response,34,&parsed) && !parsed.wmm && parsed.aid==5);
+    // An AP rejection remains a rejection, irrespective of optional IEs.
+    response[26]=17;
+    assert(mt7902_decode_assoc_response(response,30,&parsed) && parsed.status==17 && !parsed.wmm);
+    response[26]=0;
+    // Every partial WMM element is rejected atomically, not treated as WMM acceptance.
+    for (size_t n=35;n<sizeof(response);n++) {
+        parsed={0x1234,0x5678,true};
+        assert(!mt7902_decode_assoc_response(response,n,&parsed));
+        assert(parsed.status==0x1234 && parsed.aid==0x5678 && parsed.wmm);
+    }
+    for (size_t n=0;n<30;n++) assert(!mt7902_decode_assoc_response(response,n,&parsed));
+    assert(!mt7902_decode_assoc_response(nullptr,sizeof(response),&parsed));
+    assert(!mt7902_decode_assoc_response(response,sizeof(response),nullptr));
+    response[0]=0xb0;
+    assert(!mt7902_decode_assoc_response(response,sizeof(response),&parsed));
+    response[0]=0x10;
+    // A WMM Information IE is not the AP's negotiated WMM Parameter IE.
+    uint8_t info[39]={0x10};
+    const uint8_t information[]={221,7,0,0x50,0xf2,2,0,1,0};
+    memcpy(info+30,information,sizeof(information));
+    assert(mt7902_decode_assoc_response(info,sizeof(info),&parsed) && !parsed.wmm);
+    // Unrelated vendor OUI/type, unknown WMM version: no negotiated WMM.
+    response[36]=1;
+    assert(mt7902_decode_assoc_response(response,sizeof(response),&parsed) && !parsed.wmm);
+    response[36]=0; response[41]=2;
+    assert(mt7902_decode_assoc_response(response,sizeof(response),&parsed) && !parsed.wmm);
+    response[41]=1;
+    response[35]=23;
+    assert(!mt7902_decode_assoc_response(response,59,&parsed));
+    // Deterministic adversarial IE bytes: exercise bounds independently of flags.
+    uint32_t seed=0x790214;
+    for (unsigned n=30;n<256;n++) {
+        uint8_t fuzz[256]={0x10};
+        for (unsigned i=30;i<n;i++) { seed=seed*1664525u+1013904223u; fuzz[i]=(uint8_t)(seed>>24); }
+        (void)mt7902_decode_assoc_response(fuzz,n,&parsed);
+    }
+}
+static void test_roc_grant()
+{
+    // mt7921_roc_grant_tlv: rxd36 + event header4 + 24-byte grant TLV.
+    uint8_t event[64]={64}; event[3]=0x38; event[28]=0x27; event[30]=4;
+    event[42]=24; event[45]=7; event[47]=44; event[49]=2; event[51]=44;
+    event[60]=0x88; event[61]=0x13; // Granted 5000 ms, not a hardcoded decoder value.
+    Mt7902RocGrant grant={};
+    assert(mt7902_decode_roc_grant(event,sizeof(event),0,7,&grant));
+    assert(!grant.bss && grant.token==7 && !grant.status && grant.channel==44);
+    assert(grant.band==2 && !grant.width && grant.center==44 && !grant.center2);
+    assert(!grant.request_type && grant.interval_ms==5000);
+    event[60]=0xe8; event[61]=3; event[47]=1; event[49]=1; event[51]=1;
+    assert(mt7902_decode_roc_grant(event,sizeof(event),0,7,&grant));
+    assert(grant.interval_ms==1000 && grant.channel==1 && grant.band==1);
+    // Status and interval are observations, including rejection/zero lifetime.
+    event[46]=1; event[60]=event[61]=0;
+    assert(mt7902_decode_roc_grant(event,sizeof(event),0,7,&grant));
+    assert(grant.status==1 && !grant.interval_ms);
+    for (size_t n=0;n<64;n++) {
+        grant.interval_ms=0xa5a5a5a5;
+        assert(!mt7902_decode_roc_grant(event,n,0,7,&grant));
+        assert(grant.interval_ms==0xa5a5a5a5);
+    }
+    assert(!mt7902_decode_roc_grant(nullptr,64,0,7,&grant));
+    assert(!mt7902_decode_roc_grant(event,64,0,7,nullptr));
+    assert(!mt7902_decode_roc_grant(event,64,1,7,&grant));
+    assert(!mt7902_decode_roc_grant(event,64,0,8,&grant));
+    for (unsigned offset:{3u,28u,40u,42u,43u}) {
+        uint8_t bad[64]; memcpy(bad,event,64); bad[offset]^=0x80;
+        assert(!mt7902_decode_roc_grant(bad,64,0,7,&grant));
+    }
+    event[30]=0; assert(!mt7902_decode_roc_grant(event,64,0,7,&grant)); event[30]=4;
+    event[42]=20; assert(!mt7902_decode_roc_grant(event,64,0,7,&grant));
+    event[42]=25; assert(!mt7902_decode_roc_grant(event,64,0,7,&grant));
+}
 int main()
 {
     test_legacy_rates();
+    test_assoc_negotiation();
+    test_roc_grant();
     const uint8_t rsn[]={48,20,1,0,0,15,172,4,1,0,0,15,172,4,1,0,0,15,172,2,0,0};
     assert(mt7902_join_rsn(rsn,sizeof(rsn)));
     assert(!mt7902_join_rsn(nullptr,sizeof(rsn)));

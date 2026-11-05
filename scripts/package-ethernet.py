@@ -25,7 +25,8 @@ assert not any('MtkWlan' in p.name for p in stage.rglob('*'))
 manifest={'driver_version':version,'source_commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=r).decode().strip(),
  'driver_baseline_commit':'fc396baebec051f853ddee79de13f0b34138dd33','driver_backend':'standalone itlmt7902, Ethernet',
  'ui_commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=r/'userspace/HeliPort').decode().strip(),
- 'heliport_adapter_hardware_validated':False,'driver_hotspot_test':'0.2.11 baseline passed; changed 0.2.13 driver requires hardware validation',
+ 'heliport_adapter_hardware_validated':False,'heliport_ui_stability':'2.1.3 user-reported stable',
+ 'driver_hotspot_test':'0.2.13 capture passed; candidate 0.2.14 requires hardware validation',
  'driver_hardware_validated':False,'router_hardware_validated':False,
  'firmware_embedded':True,'native_wifi':False}
 (stage/'build-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')

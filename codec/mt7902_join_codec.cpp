@@ -120,6 +120,41 @@ uint32_t mt7902_ht20_rate(uint8_t mask)
     for (unsigned i=8;i>0;i--) if (mask&(1u<<(i-1))) return rate[i-1];
     return 0;
 }
+bool mt7902_decode_assoc_response(const uint8_t *frame,size_t length,
+                                   Mt7902AssocResponse *out)
+{
+    if (!frame || !out || length<30 || frame[0]!=0x10) return false;
+    Mt7902AssocResponse response={le16(frame+26),(uint16_t)(le16(frame+28)&0x3fff),false};
+    for (size_t pos=30;pos<length;) {
+        if (length-pos<2 || frame[pos+1]>length-pos-2) return false;
+        const uint8_t *ie=frame+pos;
+        const size_t bytes=ie[1];
+        // WMM Parameter: Microsoft OUI, type2, subtype1, version1; 24 bytes.
+        if (ie[0]==221 && bytes>=4 && ie[2]==0 && ie[3]==0x50 && ie[4]==0xf2 && ie[5]==2) {
+            if (bytes<6) return false;
+            if (ie[6]==1 && ie[7]==1) {
+                if (bytes!=24) return false;
+                response.wmm=true;
+            }
+        }
+        pos+=bytes+2;
+    }
+    *out=response;
+    return true;
+}
+bool mt7902_decode_roc_grant(const uint8_t *event,size_t length,uint8_t bss,
+                             uint8_t token,Mt7902RocGrant *out)
+{
+    if (!event || !out || length<64 || (event[3]>>3)!=7 ||
+        event[28]!=0x27 || !(event[30]&4) || le16(event+40)!=0) return false;
+    const uint16_t bytes=le16(event+42);
+    if (bytes<24 || bytes>length-40 || event[44]!=bss || event[45]!=token) return false;
+    const uint8_t *g=event+40;
+    Mt7902RocGrant grant={g[4],g[5],g[6],g[7],g[9],g[10],g[11],g[12],g[13],
+        (uint32_t)g[20]|(uint32_t)g[21]<<8|(uint32_t)g[22]<<16|(uint32_t)g[23]<<24};
+    *out=grant;
+    return true;
+}
 size_t mt7902_encode_keep_awake(uint8_t *out,size_t capacity)
 {
     if (!out || capacity<328) return 0;

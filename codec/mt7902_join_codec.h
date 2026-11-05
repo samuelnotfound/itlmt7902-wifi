@@ -21,6 +21,22 @@ size_t mt7902_encode_legacy_rates(uint8_t *out, size_t capacity,
 // One stream, HT20, long GI; no LDPC/STBC/40 MHz or two-stream MCS claims.
 size_t mt7902_encode_ht20(uint8_t *out, size_t capacity, uint8_t mcs_mask);
 uint32_t mt7902_ht20_rate(uint8_t mcs_mask);
+struct Mt7902AssocResponse {
+    uint16_t status, aid;
+    bool wmm;
+};
+// Fixed association response fields plus bounded IE parsing. Peer WMM comes
+// from the response, not from our requested HT plan or the AP's beacon alone.
+bool mt7902_decode_assoc_response(const uint8_t *frame, size_t length,
+                                   Mt7902AssocResponse *out);
+struct Mt7902RocGrant {
+    uint8_t bss, token, status, channel, band, width, center, center2, request_type;
+    uint32_t interval_ms;
+};
+// Full Connac2 unsolicited ROC grant (RX header36 + event header4 + TLV24).
+// Decoding is diagnostic; it does not silently change channel/timing policy.
+bool mt7902_decode_roc_grant(const uint8_t *event, size_t length, uint8_t bss,
+                             uint8_t token, Mt7902RocGrant *out);
 // mt76_connac_mcu_set_deep_sleep(false): CE CHIP_CONFIG, 328-byte payload.
 size_t mt7902_encode_keep_awake(uint8_t *out, size_t capacity);
 // UNI DEV_INFO_UPDATE: activate OMAC0/band0 with the firmware-reported MAC.
