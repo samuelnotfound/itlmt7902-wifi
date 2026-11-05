@@ -2,3 +2,6 @@
 	path = userspace/HeliPort
 	url = https://github.com/samuelnotfound/HeliPort-MT7902.git
 	branch = codex/mt7902-ethernet-ui
+[submodule "external/itlwm"]
+	path = external/itlwm
+	url = https://github.com/OpenIntelWireless/itlwm.git

@@ -1,0 +1,40 @@
+name: OpenIntelWireless net80211 foundation
+on:
+  push:
+    branches: ['codex/mt7902-net80211-foundation']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mt7902-net80211-foundation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  foundation:
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      MACKERNELSDK: ${{ github.workspace }}/build/MacKernelSDK
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/checkout@v4
+        with:
+          repository: acidanthera/MacKernelSDK
+          ref: 3f750085caa17ec3a7880f11c11bf4f48cd6a164
+          path: build/MacKernelSDK
+      - name: Compile upstream MAC foundation
+        run: |
+          mkdir -p build/net80211-foundation
+          bash scripts/build-net80211-foundation.sh > build/net80211-foundation/compile.log 2>&1 || { tail -100 build/net80211-foundation/compile.log; exit 1; }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: net80211-foundation-build-evidence
+          path: |
+            build/net80211-foundation/compile.log
+            build/net80211-foundation/manifest.json
+            build/net80211-foundation/defined-symbols.txt
+            external/itlwm/LICENSE
+          if-no-files-found: error

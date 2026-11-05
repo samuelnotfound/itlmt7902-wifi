@@ -1,3 +1,10 @@
+# OpenIntelWireless net80211 integration branch
+
+This branch pins and compiles the official itlwm wireless stack for the MT7902
+Ethernet port. [Foundation status and ownership contracts](foundation/README.md).
+The new stack is not yet connected to the active MT7902 driver. Use the
+`codex/mt7902-ethernet` branch for the current packaged driver/app.
+
 # itlmt7902-wifi — standalone Ethernet driver + HeliPort UI
 
 This repository is a fork of [hbyonly1/itlmt7922-wifi](https://github.com/hbyonly1/itlmt7922-wifi),

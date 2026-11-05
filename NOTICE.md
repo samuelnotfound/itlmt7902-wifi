@@ -32,3 +32,12 @@ itlwm kernel driver. Binary bundles include both projects' notices.
 
 Keep the source copyright notices, this file, LICENSE, and the firmware and
 third-party license files with redistributed source and binaries.
+
+## OpenIntelWireless net80211 integration branch
+
+The external/itlwm submodule pins official OpenIntelWireless/itlwm commit
+53c51c2cdd6e4b69beb91f310d74c53422b0f8bd. Its macOS port is GPL-2.0-or-later
+with retained OpenBSD/NetBSD/other file notices. The foundation build compiles
+that source separately; it is not included in the current standalone kext.
+See external/itlwm/LICENSE and the original notices in each source file.
+Future linked derivative builds must retain those source/license obligations.

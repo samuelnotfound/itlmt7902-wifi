@@ -16,12 +16,12 @@ FIRMWARE = {
     'WIFI_MT7902_patch_mcu_1_1_hdr.bin': 'd73ba9e982f781221a2b9f10c42031f20a9dce046929fc0d55c791a417efe30a',
     'WIFI_RAM_CODE_MT7902_1.bin': 'b5958ac72c71fb8405e080f52d378d02b484812b9f1010c8843727056bbfc998',
 }
-SOURCE_DIRS = {'src', 'codec', 'app', 'tests', 'fw', 'scripts', 'docs', 'licenses', '.github'}
+SOURCE_DIRS = {'src', 'codec', 'app', 'tests', 'fw', 'scripts', 'docs', 'licenses', '.github', 'foundation'}
 SOURCE_FILES = {
     'README.md', 'README.zh-CN.md', 'LICENSE', 'NOTICE.md', 'CHANGELOG.md',
     'CONTRIBUTING.md', 'SECURITY.md', '.gitignore', '.gitattributes', '.gitmodules',
 }
-EXCLUDED_DIRS = {'.git', 'build', 'dist', 'userspace'} # separately pinned/tested app submodule, never bundled as source
+EXCLUDED_DIRS = {'.git', 'build', 'dist', 'userspace', 'external'} # separately pinned/tested app submodule, never bundled as source
 PRIVATE_FIELDS = {'SystemSerialNumber', 'SystemUUID', 'MLB', 'ROM', 'BoardSerialNumber'}
 PRIVATE_PATTERNS = (
     ('personal absolute path', re.compile(rb'/(?:Users|home|Volumes)/[^/\s\x00"\x27]+/')),
