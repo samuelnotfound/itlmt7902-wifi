@@ -123,38 +123,39 @@ static void test_assoc_negotiation()
 }
 static void test_roc_grant()
 {
-    // mt7921_roc_grant_tlv: rxd36 + event header4 + 24-byte grant TLV.
-    uint8_t event[64]={64}; event[3]=0x38; event[28]=0x27; event[30]=4;
-    event[42]=24; event[45]=7; event[47]=44; event[49]=2; event[51]=44;
-    event[60]=0x88; event[61]=0x13; // Granted 5000 ms, not a hardcoded decoder value.
+    // mt7921_roc_grant_tlv is 20 bytes; the ACQUIRE request is a different
+    // 24-byte layout. Independent packed grant fixture after rxd36 + hdr4.
+    uint8_t event[60]={60}; event[3]=0x38; event[28]=0x27; event[30]=4;
+    const uint8_t grantWire[]={0,0,20,0,0,7,0,44,0,2,0,44,0,0,255,0,0x88,0x13,0,0};
+    memcpy(event+40,grantWire,sizeof(grantWire));
     Mt7902RocGrant grant={};
     assert(mt7902_decode_roc_grant(event,sizeof(event),0,7,&grant));
     assert(!grant.bss && grant.token==7 && !grant.status && grant.channel==44);
     assert(grant.band==2 && !grant.width && grant.center==44 && !grant.center2);
     assert(!grant.request_type && grant.interval_ms==5000);
-    event[60]=0xe8; event[61]=3; event[47]=1; event[49]=1; event[51]=1;
+    event[56]=0xe8; event[57]=3; event[47]=1; event[49]=1; event[51]=1;
     assert(mt7902_decode_roc_grant(event,sizeof(event),0,7,&grant));
     assert(grant.interval_ms==1000 && grant.channel==1 && grant.band==1);
     // Status and interval are observations, including rejection/zero lifetime.
-    event[46]=1; event[60]=event[61]=0;
+    event[46]=1; event[56]=event[57]=0;
     assert(mt7902_decode_roc_grant(event,sizeof(event),0,7,&grant));
     assert(grant.status==1 && !grant.interval_ms);
-    for (size_t n=0;n<64;n++) {
+    for (size_t n=0;n<60;n++) {
         grant.interval_ms=0xa5a5a5a5;
         assert(!mt7902_decode_roc_grant(event,n,0,7,&grant));
         assert(grant.interval_ms==0xa5a5a5a5);
     }
-    assert(!mt7902_decode_roc_grant(nullptr,64,0,7,&grant));
-    assert(!mt7902_decode_roc_grant(event,64,0,7,nullptr));
-    assert(!mt7902_decode_roc_grant(event,64,1,7,&grant));
-    assert(!mt7902_decode_roc_grant(event,64,0,8,&grant));
+    assert(!mt7902_decode_roc_grant(nullptr,60,0,7,&grant));
+    assert(!mt7902_decode_roc_grant(event,60,0,7,nullptr));
+    assert(!mt7902_decode_roc_grant(event,60,1,7,&grant));
+    assert(!mt7902_decode_roc_grant(event,60,0,8,&grant));
     for (unsigned offset:{3u,28u,40u,42u,43u}) {
-        uint8_t bad[64]; memcpy(bad,event,64); bad[offset]^=0x80;
-        assert(!mt7902_decode_roc_grant(bad,64,0,7,&grant));
+        uint8_t bad[60]; memcpy(bad,event,60); bad[offset]^=0x80;
+        assert(!mt7902_decode_roc_grant(bad,60,0,7,&grant));
     }
-    event[30]=0; assert(!mt7902_decode_roc_grant(event,64,0,7,&grant)); event[30]=4;
-    event[42]=20; assert(!mt7902_decode_roc_grant(event,64,0,7,&grant));
-    event[42]=25; assert(!mt7902_decode_roc_grant(event,64,0,7,&grant));
+    event[30]=0; assert(!mt7902_decode_roc_grant(event,60,0,7,&grant)); event[30]=4;
+    event[42]=19; assert(!mt7902_decode_roc_grant(event,60,0,7,&grant));
+    event[42]=21; assert(!mt7902_decode_roc_grant(event,60,0,7,&grant));
 }
 int main()
 {

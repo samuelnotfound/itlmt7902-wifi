@@ -33,7 +33,7 @@ struct Mt7902RocGrant {
     uint8_t bss, token, status, channel, band, width, center, center2, request_type;
     uint32_t interval_ms;
 };
-// Full Connac2 unsolicited ROC grant (RX header36 + event header4 + TLV24).
+// Full Connac2 unsolicited ROC grant (RX header36 + event header4 + TLV20).
 // Decoding is diagnostic; it does not silently change channel/timing policy.
 bool mt7902_decode_roc_grant(const uint8_t *event, size_t length, uint8_t bss,
                              uint8_t token, Mt7902RocGrant *out);
