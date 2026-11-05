@@ -42,11 +42,11 @@ completion timing are not yet fully observed. The exact cause is unconfirmed.
 Do not claim that OFDM, the router configuration or a prior hotspot connection
 is established as the cause. Candidate **0.2.14** now implements the QoS lifecycle
 correction and channel-grant diagnostics; see [its notes](RELEASE-0.2.14.md).
-The user reports that candidate still fails. Candidate **0.2.15** completes
+The user reports that candidate still fails. Candidate **0.2.16** completes
 EDCA QoS sequencing and adds one CONNECT-on-add retry after a response timeout.
 Both profiles are captured separately without another reboot. Its companion
-HeliPort **2.1.4** fixes saved-network security NONE metadata and uses current
-joinable scan entries for auto-join. Keep the original UI. See RELEASE-0.2.15.md.
+HeliPort **2.1.5** fixes saved-network security NONE metadata and uses current
+joinable scan entries for auto-join. Keep the original UI. See RELEASE-0.2.16.md.
 OPENCORE reads failed during this work; the newer failure capture was unavailable.
 Hardware confirmation remains required.
 
@@ -130,7 +130,7 @@ Kernel scan/join command mailbox and status: `src/itlmt7902_uc.cpp`.
 ## Next hardware test
 
 1. Verify stage 3 and loaded driver version before attempting a connection.
-2. Use the bundled HeliPort 2.1.4 to rescan and try a previously working hotspot. Capture driver
+2. Use the bundled HeliPort 2.1.5 to rescan and try a previously working hotspot. Capture driver
    state if the hotspot is absent or the join fails.
 3. Then try the failing router once and collect the same-boot logs using
    `scripts/collect-logs.sh`. Inspect `wifi-attempt-history`, `wifi-error`,
@@ -154,3 +154,16 @@ bash userspace/HeliPort/scripts/build-macos.sh
 For the driver, use `scripts/build.sh` with the pinned MacKernelSDK as documented
 in `.github/workflows/ethernet.yml`. Firmware is embedded and licensed separately;
 no additional firmware folder is required on the target macOS installation.
+
+Current 0.2.16 also adds explicit open association and isolated plaintext TX/RX.
+HeliPort 2.1.5 fixes repeated Keychain authorization by removing secret reads
+from menu metadata, blocking background authorization UI and reusing authorized
+credentials during the process. Verify on hardware before asserting connectivity.
+
+The user now requests OpenIntelWireless/itlwm as the reusable stack foundation.
+Official master was inspected at 53c51c2cdd6e4b69beb91f310d74c53422b0f8bd.
+The outer workspace main is a later laobamac-derived fork with native additions;
+it is not the same source baseline. Use the official source pin for the new
+Ethernet/net80211 integration and retain its GPL/BSD notices. The existing MT7902
+firmware/PCIe/DMA/MCU backend remains required; Intel IWM/IWX/IWN hardware code
+cannot control MT7902. Do not label a source/build foundation as a working port.

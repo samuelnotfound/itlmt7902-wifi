@@ -2,7 +2,14 @@
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
-// Connection checkpoint: legacy/HT20, non-DFS, WPA2-PSK/CCMP only.
+// Connection checkpoint: legacy/HT20, non-DFS, open or WPA2-PSK/CCMP.
+enum Mt7902JoinSecurity { MT7902_JOIN_UNSUPPORTED, MT7902_JOIN_OPEN, MT7902_JOIN_WPA2 };
+// Full beacon IE validation: privacy-clear alone must not downgrade RSN/WPA/OWE.
+Mt7902JoinSecurity mt7902_join_security(uint16_t capability, const uint8_t *ies, size_t length);
+bool mt7902_join_credentials(Mt7902JoinSecurity security, size_t password_length, bool has_pmk);
+uint16_t mt7902_assoc_capability(bool open, bool short_preamble);
+// Called after the data decoder has rejected invalid ciphertext.
+bool mt7902_rx_security_allowed(bool open, bool linked, bool protected_frame, bool amsdu, uint16_t ethertype);
 bool mt7902_join_channel(uint8_t channel);
 bool mt7902_join_rsn(const uint8_t *ie, size_t length);
 size_t mt7902_encode_join_domain(uint8_t *out, size_t capacity, uint8_t channel);

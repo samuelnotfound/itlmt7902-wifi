@@ -230,9 +230,10 @@ bool itlmt7902::m3RxData(const uint8_t *p, uint32_t len)
         if (reorder) itl_reorder_rx(&rxBa[tid].r, sn, nullptr, 0, nowMs(), baDeliverCb, this);
         return true;
     }
-    // Protected ciphertext is rejected before LLC parsing; cleartext is only
-    // admitted for EAPOL during the WPA2 handshake, never as IP/DHCP/ARP.
-    if (!data.protected_frame && (status == MT7902_DATA_AMSDU || data.ethertype != 0x888e)) {
+    // Open plaintext is admitted only on an explicitly open, associated link.
+    // WPA2 still rejects plaintext IP/ARP/DHCP; decoder rejects bad ciphertext.
+    if (!mt7902_rx_security_allowed(m3Open,m3linkUp,data.protected_frame,
+        status==MT7902_DATA_AMSDU,data.ethertype)) {
         stRxDrop++;
         stRxCipherReject++;
         return true;

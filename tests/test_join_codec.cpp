@@ -5,6 +5,45 @@
 #include <cstring>
 #include <cstdio>
 #include <initializer_list>
+static void test_open_security()
+{
+    const uint8_t rates[]={1,1,0x82};
+    const uint8_t rsn[]={48,20,1,0,0,15,172,4,1,0,0,15,172,4,1,0,0,15,172,2,0,0};
+    const uint8_t wpa[]={221,4,0,0x50,0xf2,1};
+    assert(mt7902_join_security(0x0401,rates,sizeof(rates))==MT7902_JOIN_OPEN);
+    assert(mt7902_join_security(0x0411,rsn,sizeof(rsn))==MT7902_JOIN_WPA2);
+    // No privacy bit is insufficient to prove open: never downgrade RSN/OWE/WPA.
+    assert(mt7902_join_security(0x0401,rsn,sizeof(rsn))==MT7902_JOIN_UNSUPPORTED);
+    assert(mt7902_join_security(0x0401,wpa,sizeof(wpa))==MT7902_JOIN_UNSUPPORTED);
+    assert(mt7902_join_security(0x0411,rates,sizeof(rates))==MT7902_JOIN_UNSUPPORTED); // WEP
+    assert(mt7902_join_security(0x0411,wpa,sizeof(wpa))==MT7902_JOIN_UNSUPPORTED); // WPA1
+    uint8_t owe[sizeof(rsn)]; memcpy(owe,rsn,sizeof(rsn)); owe[19]=18;
+    assert(mt7902_join_security(0x0411,owe,sizeof(owe))==MT7902_JOIN_UNSUPPORTED);
+    uint8_t duplicate[sizeof(rsn)*2]; memcpy(duplicate,rsn,sizeof(rsn)); memcpy(duplicate+sizeof(rsn),rsn,sizeof(rsn));
+    assert(mt7902_join_security(0x0411,duplicate,sizeof(duplicate))==MT7902_JOIN_UNSUPPORTED);
+    for (size_t n=1;n<sizeof(rsn);n++)
+        assert(mt7902_join_security(0x0401,rsn,n)==MT7902_JOIN_UNSUPPORTED);
+    assert(mt7902_join_security(0x0401,nullptr,1)==MT7902_JOIN_UNSUPPORTED);
+    assert(mt7902_join_credentials(MT7902_JOIN_OPEN,0,false));
+    assert(!mt7902_join_credentials(MT7902_JOIN_OPEN,8,false));
+    assert(!mt7902_join_credentials(MT7902_JOIN_OPEN,0,true));
+    for (size_t n=0;n<70;n++) {
+        assert(mt7902_join_credentials(MT7902_JOIN_WPA2,n,false)==(n>=8 && n<=63));
+        assert(!mt7902_join_credentials(MT7902_JOIN_UNSUPPORTED,n,false));
+    }
+    assert(mt7902_join_credentials(MT7902_JOIN_WPA2,0,true));
+    assert(!mt7902_join_credentials(MT7902_JOIN_WPA2,8,true));
+    assert(mt7902_assoc_capability(true,false)==0x0401);
+    assert(mt7902_assoc_capability(true,true)==0x0421);
+    assert(mt7902_assoc_capability(false,false)==0x0411);
+    assert(mt7902_assoc_capability(false,true)==0x0431);
+    for (unsigned open=0;open<2;open++) for (unsigned linked=0;linked<2;linked++)
+        for (unsigned protectedFrame=0;protectedFrame<2;protectedFrame++)
+            for (unsigned amsdu=0;amsdu<2;amsdu++) for (uint16_t et:{0x0800,0x0806,0x86dd,0x888e}) {
+                const bool expected=open?(linked && !protectedFrame):(protectedFrame || (!amsdu && et==0x888e));
+                assert(mt7902_rx_security_allowed(open,linked,protectedFrame,amsdu,et)==expected);
+            }
+}
 static void test_peer_commands()
 {
     const uint8_t peer[]={2,0x11,0x22,0x33,0x44,0x55};
@@ -215,6 +254,7 @@ static void test_roc_grant()
 }
 int main()
 {
+    test_open_security();
     test_peer_commands();
     test_legacy_rates();
     test_assoc_negotiation();

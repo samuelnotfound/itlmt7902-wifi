@@ -87,7 +87,7 @@ IOReturn itlmt7902UC::externalMethod(uint32_t selector, IOExternalMethodArgument
         memcpy(&j, a->structureInput, sizeof(j));
         IOReturn r = kIOReturnBadArgument;
         size_t sl = strnlen(j.ssid, sizeof(j.ssid)), pl = strnlen(j.psk, sizeof(j.psk));
-        if (j.abi == ITL_UC_ABI_VERSION && sl >= 1 && sl <= 32 && pl >= 8 && pl <= 63) r = drv->ucJoin(j.ssid, j.psk);
+        if (j.abi == ITL_UC_ABI_VERSION && sl >= 1 && sl <= 32 && (pl == 0 || (pl >= 8 && pl <= 63))) r = drv->ucJoin(j.ssid, j.psk);
         bzero(&j, sizeof(j));
         return r;
     }
@@ -238,14 +238,8 @@ void itlmt7902::wifiNets()
             d->setObject("rssi", rs); d->setObject("age", ag);
             bool joinable=__atomic_load_n(&joinControlReady,__ATOMIC_ACQUIRE) &&
                 mt7902_join_channel(a.ch);
-            bool validRsn=false;
-            for (size_t offset=0;offset+2<=a.ieLen;) {
-                const size_t bytes=(size_t)a.ie[offset+1]+2;
-                if (bytes>a.ieLen-offset) break;
-                if (a.ie[offset]==48) { validRsn=mt7902_join_rsn(a.ie+offset,bytes); break; }
-                offset+=bytes;
-            }
-            d->setObject("joinable",joinable && validRsn?kOSBooleanTrue:kOSBooleanFalse);
+            const Mt7902JoinSecurity security=(Mt7902JoinSecurity)a.joinSecurity;
+            d->setObject("joinable",joinable && security!=MT7902_JOIN_UNSUPPORTED?kOSBooleanTrue:kOSBooleanFalse);
             arr->setObject(d);
         }
         if (ag) ag->release();
@@ -494,6 +488,7 @@ void itlmt7902::apSeen(const uint8_t *p, uint32_t len, uint32_t off, const char 
     a.probe = f[0] == 0x50;                                                  // probe response (a beacon is 0x80)
     a.bcnInt = (uint16_t)(f[32] | (f[33] << 8));
     a.cap = (uint16_t)(f[34] | (f[35] << 8));
+    a.joinSecurity=(uint8_t)mt7902_join_security(a.cap,f+36,(size_t)(p+len-f-36));
     const uint8_t *ies = f + 36, *iend = p + len;
     uint16_t il = iend > ies ? ieWhole(ies, (uint32_t)(iend - ies), ITL_NATIVE_IE_MAX) : 0;
     memcpy(a.ie, ies, il);
@@ -536,7 +531,7 @@ static const char *failText(const char *stage)
     if (!strncmp(stage, "assoc-timeout-fail", 18)) return "no association response received (password not checked yet)";
     if (!strncmp(stage, "assoc-fail", 10)) return "the access point refused association";
     if (!strncmp(stage, "hs-fail", 7)) return "key handshake failed";
-    if (!strncmp(stage, "security-fail", 13)) return "requires WPA2-PSK with CCMP and optional PMF";
+    if (!strncmp(stage, "security-fail", 13)) return "network security and supplied credentials do not match: use an empty password only for open Wi-Fi, or WPA2-PSK/CCMP with optional PMF";
     if (!strncmp(stage, "hw-prep-fail", 12)) return "radio or transmit-power setup failed";
     return "connection failed";
 }

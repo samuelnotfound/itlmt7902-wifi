@@ -64,6 +64,7 @@ void itlmt7902::m3Capture(const uint8_t *frame, uint32_t len, const char *ssid, 
     tgtCh = ch;
     tgtBcnInt = (uint16_t)(frame[32] | (frame[33] << 8));
     tgtCap = (uint16_t)(frame[34] | (frame[35] << 8));
+    tgtIeComplete = len - 36 <= sizeof(tgtIe);
     tgtIeLen = len - 36 > sizeof(tgtIe) ? (uint32_t)sizeof(tgtIe) : len - 36;
     memcpy(tgtIe, frame + 36, tgtIeLen);
 }
@@ -732,7 +733,7 @@ int itlmt7902::m3Assoc()
     uint8_t *p = f + 24;
     // Advertise the actual AP/driver rate intersection, including CCK only when offered.
     bool g2 = tgtCh <= 14;
-    put16(p, g2 && apCck ? 0x0431 : 0x0411); p += 2;
+    put16(p, mt7902_assoc_capability(m3Open,g2 && apCck)); p += 2;
     put16(p, 10); p += 2;                                        // listen interval
     uint8_t sl = (uint8_t)strlen(m3ssid);
     *p++ = 0; *p++ = sl; memcpy(p, m3ssid, sl); p += sl;
@@ -742,7 +743,7 @@ int itlmt7902::m3Assoc()
     p+=rateBytes;
     static const uint8_t rsn[22] = {0x30, 0x14, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04,
                                     0x01, 0x00, 0x00, 0x0f, 0xac, 0x02, 0x00, 0x00};
-    memcpy(p, rsn, sizeof(rsn)); p += sizeof(rsn);
+    if (!m3Open) { memcpy(p, rsn, sizeof(rsn)); p += sizeof(rsn); }
     if (fastActive) {
         p += mt7902_encode_ht20(p,(size_t)(f+sizeof(f)-p),apCaps.mcsRx[0]);
         if (apCaps.vht) p += itl_caps_build_vht(p, fastAllow160);
@@ -808,6 +809,7 @@ int itlmt7902::m3Run1()
     m3reachedAssoc = false;
     m3prepared = false;
     m3cipher = 0;
+    m3Open = false;
     m3dataOn = false;
     m3linkUp = false;
     m3wantEapol = false;
@@ -871,27 +873,28 @@ int itlmt7902::m3Run1()
         lvl = fastLevel;
     }
 
-    // PMK now (4096 PBKDF2 iterations), kept for the 4-way handshake; native Wi-Fi hands over the key its supplicant derived
-    uint8_t pmk[32];
-    if (nets[sel].hasPmk) memcpy(pmk, nets[sel].pmk, sizeof(pmk));
-    else itl_wpa_pmk(m3psk, (const uint8_t *)m3ssid, strlen(m3ssid), pmk);
-    memcpy(m3pmk, pmk, sizeof(m3pmk));
-    bzero(pmk, sizeof(pmk));
-    m3log("pmk ready");
-    m3Publish("pmk");
-
-    // step 2: firmware / hardware prep, BSS + STA records in the "not associated" state, ROC on the AP's channel
+    // Explicit credentials and the complete beacon must agree. An empty key
+    // cannot silently downgrade a protected SSID (including OWE/WEP/WPA).
     m3ParseAp();
-    if (!apSupp && !apCck) {
-        m3Publish("rates-fail");
-        return ITL_EINVAL;
+    if (!apSupp && !apCck) { m3Publish("rates-fail"); return ITL_EINVAL; }
+    const Mt7902JoinSecurity security=tgtIeComplete?
+        mt7902_join_security(tgtCap,tgtIe,tgtIeLen):MT7902_JOIN_UNSUPPORTED;
+    if (!mt7902_join_credentials(security,strlen(m3psk),nets[sel].hasPmk)) {
+        m3log("security/credentials mismatch mode=%u has_key=%u",security,
+            (m3psk[0] || nets[sel].hasPmk)?1u:0u);
+        m3Publish("security-fail"); return ITL_EINVAL;
     }
-    if (!mt7902_join_rsn(apRsn,apRsnLen)) {
-        m3log("unsupported RSN: requires WPA2-PSK, CCMP group/pairwise, optional PMF");
-        bzero(m3pmk,sizeof(m3pmk));
-        m3Publish("security-fail");
-        return ITL_EINVAL;
+    m3Open=security==MT7902_JOIN_OPEN;
+    setProperty("wifi-security",m3Open?"open":"wpa2");
+    if (!m3Open) {
+        uint8_t pmk[32];
+        if (nets[sel].hasPmk) memcpy(pmk,nets[sel].pmk,sizeof(pmk));
+        else itl_wpa_pmk(m3psk,(const uint8_t *)m3ssid,strlen(m3ssid),pmk);
+        memcpy(m3pmk,pmk,sizeof(m3pmk)); bzero(pmk,sizeof(pmk));
+        m3log("pmk ready"); m3Publish("pmk");
     }
+
+    // step 2: hardware prep and fresh peer/ROC on the AP channel.
     int prepRc = m3HwPrep();
     if (prepRc) { m3Publish("hw-prep-fail"); return prepRc; }
     if (!m3devReady) {
@@ -954,7 +957,13 @@ int itlmt7902::m3Run1()
     if (!rc) {
         rc=m3Bss(true);
         if (!rc) rc=m3Sta(2,false,m3aid);
-        if (!rc) rc=m3Handshake();
+        if (!rc && !m3Open) rc=m3Handshake();
+        if (!rc && m3Open) {
+            // Open links have no RSN exchange or keys. Only now admit plaintext.
+            m3cipher=0; m3dataOn=true;
+            setProperty("wifi-handshake","not-required-open");
+            m3log("open association complete; no key handshake");
+        }
         m3wantEapol = false;
         m3Publish(rc ? "hs-fail" : "hs-ok");
     }
@@ -1041,6 +1050,7 @@ void itlmt7902::m3Teardown()
     m3prepared=false;
     m3dataOn = false;
     m3cipher = 0;
+    m3Open = false;
     IOSleep(100);
 }
 
@@ -1124,6 +1134,7 @@ bool itlmt7902::chipRecover()
     m3linkUp = false;
     m3dataOn = false;
     m3cipher = 0;
+    m3Open = false;
     ethStalled = false;
     fastActive = false;
     peerQos = false;
@@ -1293,7 +1304,7 @@ int itlmt7902::ethTx(const uint8_t *e, uint32_t len)
 {
     if (!m3linkUp || len < 14) return -1;
     bool full = false;
-    bool ok = m3TxData(e, be16p(e + 12), e + 14, len - 14, true, &full);
+    bool ok = m3TxData(e, be16p(e + 12), e + 14, len - 14, !m3Open, &full);
     if (full) return 1;
     if (isBigEcho(e, len, 8)) icmpReqTx++;
     if (ok) stTx++; else stTxFail++;

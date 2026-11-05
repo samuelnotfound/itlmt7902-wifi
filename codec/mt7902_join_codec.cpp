@@ -6,6 +6,38 @@ uint16_t le16(const uint8_t *p) { return (uint16_t)(p[0] | (uint16_t)p[1]<<8); }
 bool suite(const uint8_t *p, uint8_t type) { return !p[0] && p[1]==15 && p[2]==172 && p[3]==type; }
 const uint8_t legacyRates[]={2,4,11,22,12,18,24,36,48,72,96,108}; // 500 kb/s.
 }
+Mt7902JoinSecurity mt7902_join_security(uint16_t capability,const uint8_t *ies,size_t length)
+{
+    if (!ies && length) return MT7902_JOIN_UNSUPPORTED;
+    const uint8_t *rsn=nullptr; size_t rsnBytes=0; bool wpa=false;
+    for (size_t pos=0;pos<length;) {
+        if (length-pos<2 || ies[pos+1]>length-pos-2) return MT7902_JOIN_UNSUPPORTED;
+        const size_t bytes=(size_t)ies[pos+1]+2;
+        if (ies[pos]==48) {
+            if (rsn) return MT7902_JOIN_UNSUPPORTED;
+            rsn=ies+pos; rsnBytes=bytes;
+        }
+        if (ies[pos]==221 && bytes>=6 && !ies[pos+2] && ies[pos+3]==0x50 &&
+            ies[pos+4]==0xf2 && ies[pos+5]==1) wpa=true;
+        pos+=bytes;
+    }
+    if (!(capability&0x10)) return !rsn && !wpa?MT7902_JOIN_OPEN:MT7902_JOIN_UNSUPPORTED;
+    return mt7902_join_rsn(rsn,rsnBytes)?MT7902_JOIN_WPA2:MT7902_JOIN_UNSUPPORTED;
+}
+bool mt7902_join_credentials(Mt7902JoinSecurity security,size_t password_length,bool has_pmk)
+{
+    if (security==MT7902_JOIN_OPEN) return !password_length && !has_pmk;
+    return security==MT7902_JOIN_WPA2 && (has_pmk?!password_length:(password_length>=8 && password_length<=63));
+}
+uint16_t mt7902_assoc_capability(bool open,bool short_preamble)
+{
+    return (uint16_t)(0x0401 | (short_preamble?0x20:0) | (open?0:0x10));
+}
+bool mt7902_rx_security_allowed(bool open,bool linked,bool protected_frame,bool amsdu,uint16_t ethertype)
+{
+    if (open) return linked && !protected_frame;
+    return protected_frame || (!amsdu && ethertype==0x888e);
+}
 bool mt7902_parse_legacy_rates(const uint8_t *ies,size_t length,uint8_t channel,
                                Mt7902LegacyRates *out)
 {

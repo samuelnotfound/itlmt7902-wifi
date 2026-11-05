@@ -161,7 +161,7 @@ private:
     // sec: ITL_SEC_* (itlmt7902_uc.cpp); rssi in dBm, 0 = not measured; seenMs = nowMs() of the last beacon / probe response
     // cap / bcnInt / ie / probe: the frame as heard (native Wi-Fi hands them to the Family as the scan result's beacon message)
     struct itl_ap { uint8_t bssid[6]; uint8_t ch; char ssid[33]; int8_t rssi; uint8_t sec; uint32_t seenMs;
-                    uint8_t probe; uint16_t cap, bcnInt, ieLen; uint8_t ie[ITL_NATIVE_IE_MAX]; } aps[ITL_NATIVE_AP_MAX];
+                    uint8_t probe, joinSecurity; uint16_t cap, bcnInt, ieLen; uint8_t ie[ITL_NATIVE_IE_MAX]; } aps[ITL_NATIVE_AP_MAX];
     int nAps = 0;
     uint8_t mcuSeq = 0;
     // M3 (boot-arg mt7902_stage=3): associate to the configured network, WPA2-PSK, Ethernet interface
@@ -194,6 +194,7 @@ private:
     void m3ParseAp();
     volatile bool rocGrant = false;
     uint8_t rocTok = 0, rocStatus = 0xff;
+    bool m3Open = false;                     // Explicit empty-key request, confirmed against beacon security.
     uint8_t m3cipher = 0;                    // 0 = open, 4 = CCMP (BSS_INFO sec TLV)
     uint8_t apSupp = 0, apBasic = 0;         // OFDM rate bitmaps (6,9,12,18,24,36,48,54 -> bit 0..7)
     uint8_t apCck = 0, apBasicCck = 0;       // 2.4 GHz CCK rate bitmaps (1,2,5.5,11 -> bit 0..3)
@@ -424,6 +425,7 @@ private:
     uint16_t tgtCap = 0, tgtBcnInt = 0;
     uint8_t tgtIe[1024] = {0};
     uint32_t tgtIeLen = 0;
+    bool tgtIeComplete = false;
     char m1buf[3072] = {0};
     size_t m1len = 0;
     bool m1Started = false;
