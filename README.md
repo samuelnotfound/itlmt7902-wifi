@@ -3,7 +3,7 @@
 This repository is a fork of [hbyonly1/itlmt7922-wifi](https://github.com/hbyonly1/itlmt7922-wifi),
 adapted for MediaTek **MT7902 PCIe 14c3:7902** on Intel x86_64 macOS Tahoe.
 It contains the standalone `itlmt7902.kext` and links a modified **HeliPort** UI
-through the [userspace/HeliPort submodule](userspace/HeliPort).
+through the [userspace/HeliPort submodule](userspace/HeliPort). NOT READY FOR USE!
 
 The driver exposes an Ethernet interface managed through HeliPort's menu-bar UI.
 
