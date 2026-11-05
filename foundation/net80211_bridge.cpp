@@ -487,6 +487,14 @@ int Mt7902Net80211::acknowledgeQuiesced(bool quiesced)
     original_state_(&ic_,IEEE80211_S_INIT,-1);
     stopping_=oldStopping;
     ic_.ic_if.if_flags&=~(IFF_RUNNING | IFF_UP);
+    // A list refresh after disconnect must not rejoin the previous SSID with
+    // a scrubbed PMK or inherit its protected-network mode in a new session.
+    join_requested_=false;
+    ieee80211_disable_rsn(&ic_);
+    ieee80211_disable_wep(&ic_);
+    ic_.ic_flags&=~(IEEE80211_F_AUTO_JOIN | IEEE80211_F_PSK | IEEE80211_F_RSNON);
+    bzero(ic_.ic_des_essid,sizeof(ic_.ic_des_essid));
+    ic_.ic_des_esslen=0;
     bzero(ic_.ic_psk,sizeof(ic_.ic_psk));
     stopping_=false;
     return session_.quiesced()?0:EBUSY;

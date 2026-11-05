@@ -151,7 +151,10 @@ int Mt7902Net80211Runtime::gated(int action,void *argument)
             const int error=self->bridge_.initialize(self,self->interface_,self->statistics_,self->loop_,self->gate_,self->mac_,backend);
             self->attached_=!error;return error;
         }
-        case Pause: self->bridge_.pause(); return 0;
+        case Pause:
+            self->bridge_.pause();
+            if(self->getOutputQueue())self->getOutputQueue()->flush();
+            return 0;
         case Reset: return self->bridge_.acknowledgeQuiesced(true);
         case Shutdown: {const int error=self->bridge_.shutdown(true);self->attached_=false;return error;}
         case Join: {
