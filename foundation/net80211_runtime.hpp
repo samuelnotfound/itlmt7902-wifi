@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 #include "net80211_bridge.hpp"
+#include "net80211_mailbox.h"
 #include "mt7902_net80211_hardware.hpp"
 #include "mt7902_net80211_rx.h"
 #include <IOKit/IOLocks.h>
@@ -33,11 +34,12 @@ private:
         Kind kind; uint64_t token; uint32_t epoch; uint16_t length;
         Mt7902Net80211State state; Mt7902Net80211Key key; Mt7902Net80211Tx tx;
         uint8_t frame[1900];
-    } commands_[32] = {}, current_ = {};
+    };
+    Mt7902NetMailbox<Command,32,4> commands_;
+    Command current_ = {};
     struct Rx { Mt7902Net80211Rx metadata; uint32_t epoch; uint8_t frame[4096]; }
-        receives_[64] = {}, receive_ = {};
-    uint8_t normalized_[4096] = {};
-    uint32_t commandHead_=0,commandTail_=0,rxHead_=0,rxTail_=0;
+        incoming_ = {}, receive_ = {};
+    Mt7902NetMailbox<Rx,64> receives_;
     IOLock *mailbox_=nullptr;
     itlmt7902 *driver_=nullptr;
     Mt7902Net80211Hardware *hardware_=nullptr;
@@ -50,6 +52,7 @@ private:
     bool baseStarted_=false,attached_=false,used_=false,radioReady_=true,authorized_=false,joining_=false,quiesced_=true;
     uint32_t epoch_=0,lastPoll_=0,joinStart_=0;
     int failure_=0;
+    bool fatal_=false;
     uint8_t mac_[6] = {}, ethernet_[1600] = {};
     bool push(const Command &);
     bool pop();

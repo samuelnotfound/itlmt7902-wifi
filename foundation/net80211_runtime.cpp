@@ -35,7 +35,7 @@ bool Mt7902Net80211Runtime::configureInterface(IONetworkInterface *interface)
 {
     if (!IOEthernetController::configureInterface(interface)) return false;
     auto data=interface->getParameter(kIONetworkStatsKey);
-    statistics_=data?static_cast<IONetworkStats *>(data->getBuffer()):nullptr;
+    statistics_=data?const_cast<IONetworkStats *>(static_cast<const IONetworkStats *>(data->getBuffer())):nullptr;
     return statistics_!=nullptr;
 }
 bool Mt7902Net80211Runtime::start(IOService *provider)
@@ -81,25 +81,19 @@ bool Mt7902Net80211Runtime::push(const Command &command)
 {
     IOLockLock(mailbox_);
     // Reserve control slots so bulk TX cannot starve association/key operations.
-    const bool room=commandHead_-commandTail_<(command.kind==Tx?28u:32u);
-    if(room) commands_[commandHead_++%32]=command;
+    const bool room=commands_.push(command,command.kind!=Tx);
     IOLockUnlock(mailbox_); return room;
 }
 bool Mt7902Net80211Runtime::pop()
 {
     IOLockLock(mailbox_);
-    const bool available=commandHead_!=commandTail_;
-    if (available) {
-        current_=commands_[commandTail_%32];
-        bzero(&commands_[commandTail_++%32],sizeof(Command));
-    }
+    const bool available=commands_.pop(current_);
     IOLockUnlock(mailbox_); return available;
 }
 void Mt7902Net80211Runtime::purge()
 {
     IOLockLock(mailbox_);
-    bzero(commands_,sizeof(commands_)); bzero(receives_,sizeof(receives_));
-    commandTail_=commandHead_; rxTail_=rxHead_;
+    commands_.clear(); receives_.clear();
     IOLockUnlock(mailbox_);
     bzero(&current_,sizeof(current_));
 }
@@ -179,20 +173,17 @@ void Mt7902Net80211Runtime::receiveDMA(const uint8_t *packet,uint32_t length)
     if (!attached_ || !used_ || !radioReady_ || !epoch_) return;
     Mt7902Net80211Rx rx={};
     if(mt7902_net80211_normalize_rx(packet,length,MT7902_NET80211_HW_CCMP,
-        normalized_,sizeof(normalized_),&rx)!=MT7902_NET80211_RX_OK) return;
+        incoming_.frame,sizeof(incoming_.frame),&rx)!=MT7902_NET80211_RX_OK) return;
     IOLockLock(mailbox_);
-    if(rxHead_-rxTail_<64) {
-        auto &slot=receives_[rxHead_++%64]; slot.metadata=rx; slot.epoch=epoch_;
-        memcpy(slot.frame,normalized_,rx.length);
-    }
+    incoming_.metadata=rx; incoming_.epoch=epoch_;
+    receives_.push(incoming_);
     IOLockUnlock(mailbox_);
 }
 void Mt7902Net80211Runtime::serviceStack()
 {
     for(unsigned budget=0;budget<64;budget++) {
         IOLockLock(mailbox_);
-        const bool available=rxHead_!=rxTail_;
-        if(available) receive_=receives_[rxTail_++%64];
+        const bool available=receives_.pop(receive_);
         IOLockUnlock(mailbox_);
         if(!available) break;
         if(receive_.epoch==epoch_) gated(Receive);
@@ -206,10 +197,10 @@ int Mt7902Net80211Runtime::reset(bool recover)
     authorized_=false; joining_=false;
     if(used_ || (recover && driver_->firmwareFault)) {
         // Do not release a stack reference while the old DMA session can run.
-        if(!driver_->quiesceHardware()) return EBUSY;
+        if(!driver_->quiesceHardware()) {fatal_=true;radioReady_=false;return EBUSY;}
         radioReady_=false;
-        if(hardware_->bound() && hardware_->releaseAfterQuiesce()) return EBUSY;
-        if(used_ && gated(Reset)) return EBUSY;
+        if(hardware_->bound() && hardware_->releaseAfterQuiesce()) {fatal_=true;return EBUSY;}
+        if(used_ && gated(Reset)) {fatal_=true;return EBUSY;}
         quiesced_=true;
     }
     purge(); epoch_=0; used_=false;
@@ -247,6 +238,9 @@ void Mt7902Net80211Runtime::process()
         if(!error && current_.kind==State) error=hardware_->changeState(epoch_,current_.state);
         if(!error && current_.kind==Key) error=hardware_->updateKey(epoch_,current_.key);
         if(!error && current_.kind==Tx) {
+            error=hardware_->setAuthorized(epoch_,gated(Authorized)==1);
+        }
+        if(!error && current_.kind==Tx) {
             const uint32_t started=driver_->nowMs();
             do {
                 error=hardware_->transmit(epoch_,current_.frame,current_.length,current_.tx);
@@ -256,9 +250,10 @@ void Mt7902Net80211Runtime::process()
                 driver_->nowMs()-started<500);
         }
         const bool scanning=current_.kind==State && current_.state.state==IEEE80211_S_SCAN && !error;
+        const bool packet=current_.kind==Tx;
         gated(Complete,&error);
         bzero(&current_,sizeof(current_));
-        if(error) { failed(this,error); break; }
+        if(error && !packet) { failed(this,error); break; }
         if(scanning) {
             // SCAN has been committed before firmware starts delivering beacons.
             error=driver_->m2Scan(nullptr);
@@ -279,7 +274,7 @@ void Mt7902Net80211Runtime::serve()
 {
     driver_->setProperty("connection-engine","net80211");
     driver_->wifiState("idle","");
-    while(!driver_->shouldStop()) {
+    while(!driver_->shouldStop() && !fatal_) {
         itlmt7902::Net request={};
         const uint32_t command=driver_->cmdTake(itlmt7902::CMD_SCAN|itlmt7902::CMD_JOIN|itlmt7902::CMD_DISCONNECT,&request);
         if(command&itlmt7902::CMD_DISCONNECT) {
@@ -313,7 +308,7 @@ void Mt7902Net80211Runtime::serve()
         }
         IOSleep(1);
     }
-    reset(false);
+    if(!fatal_)reset(false);
 }
 void Mt7902Net80211Runtime::stop(IOService *provider)
 {
@@ -337,7 +332,7 @@ void Mt7902Net80211Runtime::free()
 void itlmt7902::net80211Serve()
 {
     auto runtime=OSTypeAlloc(Mt7902Net80211Runtime);
-    if(!runtime || !runtime->init() || !runtime->setup(this)) {
+    if(!runtime || !runtime->init(nullptr) || !runtime->setup(this)) {
         if(runtime)runtime->release();wifiState("failed","net80211 allocation failed");return;
     }
     if(!runtime->attach(this)){runtime->release();wifiState("failed","net80211 attach failed");return;}
