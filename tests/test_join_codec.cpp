@@ -35,10 +35,11 @@ static void test_peer_commands()
     memset(actual,0xa5,sizeof(actual));
     assert(mt7902_encode_edca(actual+1,44,0,false,wmm,sizeof(wmm))==44);
     assert(!memcmp(actual+1,dcf,44) && actual[0]==0xa5 && actual[45]==0xa5);
-    // WMM AC_BE/AC_BK/AC_VI/AC_VO -> firmware BK/BE/VI/VO record ordering.
-    const uint8_t negotiated[44]={15,0,255,3,0,0,7,0,0,0,
-        15,0,255,3,0,0,3,0,0,0,7,0,15,0,94,0,2,0,0,0,
-        3,0,7,0,47,0,2,0,0,0,0,1,0,0};
+    // mt7921_mcu_set_tx's to_aci={1,0,2,3}, indexed by mac80211
+    // VO/VI/BE/BK, puts VI/VO/BE/BK into CE SET_EDCA_PARMS.
+    const uint8_t negotiated[44]={7,0,15,0,94,0,2,0,0,0,
+        3,0,7,0,47,0,2,0,0,0,15,0,255,3,0,0,3,0,0,0,
+        15,0,255,3,0,0,7,0,0,0,0,1,0,0};
     assert(mt7902_encode_edca(actual+1,44,0,true,wmm,sizeof(wmm))==44);
     assert(!memcmp(actual+1,negotiated,44));
     for (size_t n=0;n<44;n++) {
