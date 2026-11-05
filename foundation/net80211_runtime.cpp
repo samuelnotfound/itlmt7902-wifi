@@ -238,6 +238,8 @@ int Mt7902Net80211Runtime::join(const char *ssid,const uint8_t *pmk,size_t lengt
     if(!result) {
         used_=true; quiesced_=false; epoch_=(uint32_t)gated(Generation);
         result=gated(Scan); joining_=!result; joinStart_=driver_->nowMs();
+        driver_->setProperty("net80211-error",(uint32_t)0,32);
+        driver_->evLog("net80211 join epoch=%u rc=%d",epoch_,result);
     }
     return result;
 }
@@ -263,6 +265,12 @@ void Mt7902Net80211Runtime::process()
         }
         const bool scanning=current_.kind==State && current_.state.state==IEEE80211_S_SCAN && !error;
         const bool packet=current_.kind==Tx;
+        if(current_.kind==State || error) {
+            driver_->setProperty("net80211-last-command",(uint32_t)current_.kind,32);
+            driver_->setProperty("net80211-last-state",(uint32_t)current_.state.state,32);
+            driver_->evLog("net80211 cmd=%u state=%u epoch=%u rc=%d",(unsigned)current_.kind,
+                (unsigned)current_.state.state,epoch_,error);
+        }
         gated(Complete,&error);
         bzero(&current_,sizeof(current_));
         if(error && !packet) { failed(this,error); break; }
@@ -278,6 +286,7 @@ void Mt7902Net80211Runtime::process()
 void Mt7902Net80211Runtime::failConnection(int error)
 {
     driver_->setProperty("net80211-error",(uint32_t)error,32);
+    driver_->evLog("net80211 failed epoch=%u error=%d",epoch_,error);
     const bool wasJoining=joining_;
     reset(false);
     driver_->wifiState("failed",wasJoining?"net80211 connection failed; collect driver diagnostics":"net80211 session failed; collect driver diagnostics");
@@ -301,7 +310,8 @@ void Mt7902Net80211Runtime::serve()
             driver_->wifiState("connecting","");
             const int error=join(request.ssid,pmk,(length||request.hasPmk)?32:0);
             bzero(pmk,sizeof(pmk)); if(error)failConnection(error);
-        } else if((command&itlmt7902::CMD_SCAN) && !authorized_) {
+        } else if((command&itlmt7902::CMD_SCAN) && !authorized_ && !joining_) {
+            // HeliPort's periodic list refresh must not interrupt AUTH/ASSOC/RSN.
             const int error=scan(); if(error)failConnection(error);
         }
         bzero(&request,sizeof(request));

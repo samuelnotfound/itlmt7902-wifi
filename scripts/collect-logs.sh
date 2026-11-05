@@ -7,6 +7,7 @@ sw_vers > "$destination/system.txt"
 uname -m >> "$destination/system.txt"
 ioreg -r -c itlmt7902 -l -w0 | sed -E 's/("itl_psk[0-9]*" = ).*/\1"<redacted>"/' > "$destination/driver-ioreg.txt"
 ioreg -r -c itlmt7902Eth -l -w0 > "$destination/ethernet-ioreg.txt"
+ioreg -r -c Mt7902Net80211Runtime -l -w0 > "$destination/net80211-ethernet-ioreg.txt"
 kmutil showloaded > "$destination/loaded-kexts.txt" 2>&1
 networksetup -listallhardwareports > "$destination/network-ports.txt" 2>&1
 ifconfig -a > "$destination/interfaces.txt" 2>&1
