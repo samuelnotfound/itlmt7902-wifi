@@ -31,7 +31,7 @@ for name in poly1305 sha2 arc4 hmac cast aes ecb_enc md5 michael sha1 idgen \
 done
 flags=(-arch x86_64 -mmacosx-version-min=12.0 -O2 -g
        -mkernel -fapple-kext -fno-builtin -fno-stack-protector -nostdlib -nostdlibinc
-       -ffreestanding -fno-exceptions -fno-rtti -std=gnu++17
+       -ffreestanding -fno-exceptions -fno-rtti -std=gnu++17 -Wno-register
        -DKERNEL -DKERNEL_PRIVATE -DDRIVER_PRIVATE -DAPPLE -DNeXT
        -DIEEE80211_STA_ONLY
        -I"$source_root/itl80211/openbsd" -I"$source_root/itl80211" -I"$source_root/include"
